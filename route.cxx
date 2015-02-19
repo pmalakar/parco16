@@ -11,7 +11,7 @@
  *
  */
 
-static int getRoute (int *ro) {
+int getRoutingOrder (int *ro) {
 
 	uint64_t dcr_det_order = DCRReadUser(ND_500_DCR(CTRL_DET_ORDER));
 

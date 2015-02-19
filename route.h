@@ -7,6 +7,6 @@
 #include <mpi.h>
 #include "hwi/include/bqc/nd_500_dcr.h"
 
-extern static int getRoute(int *);
+int getRoutingOrder(int *);
 
 #endif
