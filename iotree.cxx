@@ -28,6 +28,8 @@
 #include "personality.h"
 #include "iotree.h"
 
+int rootps = 0;					// Default root process
+
 int *bridgeNodeAll; 	//[MidplaneSize*2];				//2 integers per rank
 /*
 uint8_t **depthInfo; //[numBridgeNodes][MidplaneSize];
@@ -42,10 +44,20 @@ bool visited[MidplaneSize], processed[MidplaneSize];
 uint8_t revisit[MidplaneSize][2];
 int newBridgeNode[MidplaneSize];
 
-
 /*
  *  Independent MPI-IO
+ *
+ *  writeFile 
+ *  	- writes to IO node or file system
+ *
+ *  	level - 0 (write to ION)
+ *  	level - 1 (write to file system)
+ *
+ * 		all - 0 (optimized, only bridge nodes perform the write)
+ * 		all - 1 (default, all the nodes perform the write)
+ *
  */
+
 int writeFile(dataBlock *datum, int count, int level, int all) {
 
 		double start=0.0, end=0.0, test1=0.0, test2=0.0;
@@ -961,13 +973,21 @@ int main (int argc, char **argv) {
 		 * * * * * * * * * * * * * * * * * * * * * Independent MPI-IO to file system from all compute nodes - shared file * * * * * * * * * * * * * * * * * *
 		 */
 
+		double te[2];
+
 		mode = MPI_MODE_CREATE | MPI_MODE_WRONLY;
 		MPI_File_open (COMM_BRIDGE_NODES, fileNameFS, mode, MPI_INFO_NULL, &fileHandle);
+		double t1 = MPI_Wtime();
 		totalBytes[1][0] += writeFile(datum, count, 1, 0);
+		//totalBytes[1][0] += writeFile(datum, count, 1, 0);
+		te[0] = MPI_Wtime() - t1;
 		MPI_File_close (&fileHandle);
 
 		MPI_File_open (MPI_COMM_WORLD, fileNameFS, mode, MPI_INFO_NULL, &fileHandle);
+		double t2 = MPI_Wtime();
 		totalBytes[1][1] += writeFile(datum, count, 1, 1);
+		//totalBytes[1][1] += writeFile(datum, count, 1, 1);
+		te[1] = MPI_Wtime() - t2;
 		MPI_File_close (&fileHandle);
 
 		/* free buffer */
@@ -975,12 +995,18 @@ int main (int argc, char **argv) {
 
 		//* * * * * * * * * * * * * * * * * * * * * * * * * * * End of IO * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
-
 		double tEnd = MPI_Wtime();
+		
+		double max[2];
+		MPI_Reduce(&te[0], &max[0], 1, MPI_DOUBLE, MPI_MAX, rootps, MPI_COMM_WORLD);
+		MPI_Reduce(&te[1], &max[1], 1, MPI_DOUBLE, MPI_MAX, rootps, MPI_COMM_WORLD);
+
 		MPI_Finalize ();
 
-		printf ("Times: %d %4.2f %4.2f %4.2f %d %6.3f\n", myrank, totalBytes[0][0]*1.0/oneMB, tION_elapsed_0, tION_elapsed_1, bridgeNodeInfo[0], tEnd-tStart);   // rank, MB, MB, sec..
-
+		if (myrank == rootps) {
+			printf ("Finally: %lf %lf\n", max[0], max[1]);
+			printf ("Times: %d %4.2f %4.2f %4.2f %d %6.3f\n", myrank, totalBytes[0][0]*1.0/oneMB, tION_elapsed_0, tION_elapsed_1, bridgeNodeInfo[0], tEnd-tStart);   // rank, MB, MB, sec..
+		}
 		return 0;
 
 }
