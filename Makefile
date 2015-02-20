@@ -2,6 +2,7 @@ CC=mpixlc
 CXX=mpixlcxx
 
 CFLAGS=-O3 -g
+DEBUG=-DDEBUG
 
 SRCS = 	route.cxx \
 		personality.cxx \
@@ -10,7 +11,7 @@ SRCS = 	route.cxx \
 
 OBJS = 	$(SRCS:.cxx=.o)
 
-TARGET = iotree2 
+TARGET = iotree 
 
 all:    $(TARGET)
 		@echo Compilation done.
@@ -19,7 +20,7 @@ all:    $(TARGET)
 		$(CXX) $(CFLAGS) -c $< -o $@
 
 $(TARGET): $(OBJS) 
-		$(CXX) $(CFLAGS) -o $(TARGET) $(OBJS) $(LIBS)
+		$(CXX) $(CFLAGS) -o $(TARGET) $(DEBUG) $(OBJS) $(LIBS)
 
 clean:
 		$(RM) *.o *~
