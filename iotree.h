@@ -14,11 +14,11 @@ const int INITIALIZER = -1;
 //BGQ specific
 
 MPI_Comm COMM_BRIDGE_NODES;
-#ifdef CETUS
+//#ifdef CETUS
 const int numBridgeNodes = 8;	//cetus/mira 
-#else
-const int numBridgeNodes = 32; 	//vesta
-#endif
+//#else
+//const int numBridgeNodes = 32; 	//vesta
+//#endif
 int bridgeRanks[numBridgeNodes];
 uint8_t bridgeNodeCurrIdx;
 
