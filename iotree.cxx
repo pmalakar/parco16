@@ -508,9 +508,9 @@ void expandNode (Node *currentNodePtr) {
 	if(!nodeList.empty()) printf("%d: queue size %d\n", myrank, nodeList.size());
 
 	//if (childNum != 3) printf ("%d: ERROR: childNum not 3 but %d\n", myrank, childNum);
-int BAG = 256;
-#ifdef VESTA
-	BAG = 64;
+int BAG = 64;
+#ifdef CETUS
+	BAG = 256;
 #endif
 
 	if (numNodes > BAG) {
@@ -963,12 +963,8 @@ int main (int argc, char **argv) {
 		datum->allocElement (1);
 
 		tIOStart = MPI_Wtime();
-
+/*
 		totalBytes[0][0] += writeFile(datum, count, 0, 0);			
-		/*totalBytes[0] += writeFile(datum, count, 0);		
-		totalBytes[0] += writeFile(datum, count, 0);	
-		totalBytes[0] += writeFile(datum, count, 0);
-		totalBytes[0] += writeFile(datum, count, 0);			//writes 
 */
 		tIOEnd = MPI_Wtime();
 		double tION_elapsed_0 = tIOEnd - tIOStart;
@@ -978,14 +974,7 @@ int main (int argc, char **argv) {
 
 		MPI_File_open (MPI_COMM_WORLD, fileNameION, mode, MPI_INFO_NULL, &fileHandle);
 		tIOStart = MPI_Wtime();
-		totalBytes[0][1] += writeFile(datum, count, 0, 1);
-/*
-		totalBytes[0] += writeFile(datum, count, 1);			
-		totalBytes[0] += writeFile(datum, count, 1);		
-		totalBytes[0] += writeFile(datum, count, 1);	
-		totalBytes[0] += writeFile(datum, count, 1);
-		totalBytes[0] += writeFile(datum, count, 1);			//writes 
-*/
+//		totalBytes[0][1] += writeFile(datum, count, 0, 1);
 		tIOEnd = MPI_Wtime();
 		double tION_elapsed_1 = tIOEnd - tIOStart;
 
