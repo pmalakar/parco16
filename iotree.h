@@ -59,7 +59,7 @@ class Node {
 			parent = NULL;
 			depth=0;
 			rootId = currentNode;
-			printf("depth %d\n", depth);
+			//printf("depth %d\n", depth);
 		}
 
 		Node* addChild (int id, int rootid) {
@@ -114,6 +114,7 @@ MPI_Status status;
 MPI_Request request;
 char *fileNameION = "/dev/null";
 char *fileNameFS = "dummyFile";
+char *fileNameFSBN = "dummyFileBN";
 
 double tIOStart, tIOEnd;
 double tION_elapsed[2]={0.0,0.0}, tFS_elapsed[2]={0.0,0.0};
