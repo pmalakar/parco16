@@ -75,10 +75,11 @@ int findNeighbours (int myrank, int currentRank) {
 		  MPIX_Torus2rank(neighbour[index], &rank); 
 		  neighbourRanks[currentRank][++count] = rank;
 
+#ifdef DEBUG
 		  printf("%d: Set neighbour[%d] for %d as %d i.e. %d (%d %d %d %d %d)\n", \
 			myrank, count, currentRank, neighbourRanks[currentRank][count], rank, \
 			neighbour[index][0], neighbour[index][1], neighbour[index][2], neighbour[index][3], neighbour[index][4]);
-
+#endif
 		}
 		else
 			neighbourRanks[currentRank][++count] = -1;
@@ -121,15 +122,21 @@ int findNeighbours (int myrank, int currentRank) {
 
 		  //check in neighbourRanks, if rank is not present then add
 		  for (k=0; k<=count; k++) {
+#ifdef DEBUG
 			printf("%d: compare for %d at %d ---- %d %d\n", myrank, currentRank, k, neighbourRanks[currentRank][k], rank);
+#endif
 			if(rank == neighbourRanks[currentRank][k]) { 
+#ifdef DEBUG
 				printf("%d: Rank %d at index+1 %d was already added for %d\n", myrank, rank, index+1, currentRank); break; 
+#endif
 			}
 		  }
 
 		  if (k>count) {	//no matching rank found, add the rank 
 			neighbourRanks[currentRank][++count] = rank;
+#ifdef DEBUG
 			printf("%d: Set neighbour[%d] for %d as %d i.e. %d (%d %d %d %d %d)\n", myrank, count, currentRank, neighbourRanks[currentRank][count], rank, neighbour[index+1][0], neighbour[index+1][1], neighbour[index+1][2], neighbour[index+1][3], neighbour[index+1][4]);
+#endif
 			}
 		
 		}

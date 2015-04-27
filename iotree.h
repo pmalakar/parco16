@@ -13,26 +13,9 @@ const int INITIALIZER = -1;
 
 //BGQ specific
 
-MPI_Comm COMM_BRIDGE_NODES;
-//#ifdef CETUS
-const int numBridgeNodes = 8;	//cetus/mira 
-//#else
-//const int numBridgeNodes = 32; 	//vesta
-//#endif
-int bridgeRanks[numBridgeNodes];
-uint8_t bridgeNodeCurrIdx;
-
-/*
-int bridgeNodeAll[MidplaneSize*2];				//2 integers per rank
-uint8_t depthInfo[numBridgeNodes][MidplaneSize];
-bool visited[MidplaneSize], processed[MidplaneSize];
-uint8_t revisit[MidplaneSize][2];
-int newBridgeNode[MidplaneSize];
-*/
-
 int numNodes, myWeight, myBNIdx;
 
-float avgWeight[numBridgeNodes];
+//float avgWeight[numBridgeNodes];
 float currentSum=0.0, currentAvg=0.0;
 
 int *shuffledNodes;
@@ -96,10 +79,10 @@ class Node {
 
 }*head, *tail, *root;
 
-queue <Node *> nodeList;
-queue <Node *> rootNodeList[numBridgeNodes];
+//queue <Node *> nodeList;
+//queue <Node *> rootNodeList[numBridgeNodes];
 
-Node **bridgeNodeRootList;
+//Node **bridgeNodeRootList;
 
 int writeFlag=1; 
 
@@ -200,7 +183,7 @@ class dataBlock {
 };
 
 
-int writeFile (dataBlock *, int);
+int writeFile (dataBlock *, int, int);
 
 /* Allocate and free memory before and after use */ //Though this is bit of overhead but .. Just to ensure there is no spatial locality interference affecting the statistics
     

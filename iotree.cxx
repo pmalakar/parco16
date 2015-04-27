@@ -36,19 +36,25 @@ int *newBridgeNode;	//[MidplaneSize];
 uint8_t **revisit;
 uint8_t **depthInfo; //[numBridgeNodes][MidplaneSize];
 
-/*
-uint8_t **depthInfo; //[numBridgeNodes][MidplaneSize];
-*/
+int *bridgeRanks; //	[numBridgeNodes];
+uint8_t bridgeNodeCurrIdx;
 
-//int bridgeNodeAll[MidplaneSize*2];				//2 integers per rank
-//bool visited[MidplaneSize], processed[MidplaneSize];
-//int newBridgeNode[MidplaneSize];
-//uint8_t depthInfo[numBridgeNodes][MidplaneSize];
-//uint8_t revisit[MidplaneSize][2];
+MPI_Comm COMM_BRIDGE_NODES, MPI_COMM_core;
+//#ifdef CETUS
+const int numBridgeNodes = 8;	//cetus/mira 
+//#else
+//const int numBridgeNodes = 32; 	//vesta
+//#endif
+
+float *avgWeight;			//[numBridgeNodes];
+
+queue <Node *> nodeList;
+queue <Node *> *rootNodeList;	//[numBridgeNodes];
+
+Node **bridgeNodeRootList;
 
 
 double Tmax, Tmin, Tmax_test2;
-
 
 /*
  *  Independent MPI-IO
@@ -56,22 +62,19 @@ double Tmax, Tmin, Tmax_test2;
  *  writeFile 
  *  	- writes to IO node or file system
  *
- *  	level - 0 (write to ION)
- *  	level - 1 (write to file system)
- *
  * 		all - 0 (optimized, only bridge nodes perform the write)
  * 		all - 1 (default, all the nodes perform the write)
  *
  */
 
-int writeFile(dataBlock *datum, int count, int level, int all) {
+int writeFile(dataBlock *datum, int count, int all) {
 
 	double start=0.0, end=0.0, test1=0.0, test2=0.0;
 	int nbytes=0, totalBytes=0, i;
 
-	/* write to ION or storage */
-	//Should I write myself?
-	//if (hopsToBridgeNode > 1)
+	MPI_Request sendreq;
+	MPI_Status sendst;
+
 	int result;
 
 	// Optimized independent I/O
@@ -83,25 +86,28 @@ int writeFile(dataBlock *datum, int count, int level, int all) {
 		//If I am not a bridge node 
 		if (bridgeNodeInfo[1] > 1) {
 
-			  printf("%d am not a bridge node, old BN %d, new BN %d\n", myrank, bridgeNodeInfo[1], newBridgeNode[myrank]);
+			//  printf("%d am not a bridge node, old BN %d, new BN %d\n", myrank, bridgeNodeInfo[1], newBridgeNode[myrank]);
 
 			//If I have been assigned a new bridge node 
-		  	if(newBridgeNode[myrank] != -1) {	
-			  	printf("%d sending to %d\n", myrank, bridgeRanks[newBridgeNode[myrank]]);
-					MPI_Send (datum->getAlphaBuffer(), count, MPI_DOUBLE, bridgeRanks[newBridgeNode[myrank]], bridgeRanks[newBridgeNode[myrank]], MPI_COMM_WORLD);	
-			  	printf("%d sent to %d\n", myrank, bridgeRanks[newBridgeNode[myrank]]);
+		  	if(newBridgeNode[myrank/ppn] != -1) {	
+					int	myBridgeRank = bridgeRanks[newBridgeNode[myrank/ppn]] + coreID; 
+			  	printf("%d sending to %d\n", myrank, myBridgeRank);		//bridgeRanks[newBridgeNode[myrank]]);
+					//MPI_Isend (datum->getAlphaBuffer(), count, MPI_DOUBLE, bridgeRanks[newBridgeNode[myrank]], bridgeRanks[newBridgeNode[myrank]], MPI_COMM_WORLD, &sendreq);	
+					MPI_Isend (datum->getAlphaBuffer(), count, MPI_DOUBLE, myBridgeRank, myBridgeRank, MPI_COMM_WORLD, &sendreq);	
+	//		  	printf("%d sent to %d\n", myrank, bridgeRanks[newBridgeNode[myrank]]);
+					MPI_Wait (&sendreq, &sendst);
 		  	}
 
 			//If I have not been assigned a new bridge node, write 
 		  	else {
-			  	printf("%d is writing\n", myrank);
+	//		  	printf("%d is writing\n", myrank);
 				result = MPI_File_write_at (fileHandle, myrank*count*sizeof(double), datum->getAlphaBuffer(), count, MPI_DOUBLE, &status);
 				if ( result != MPI_SUCCESS) {
 					prnerror (result, "MPI_File_write_at Error:");
 				}
 				MPI_Get_elements( &status, MPI_CHAR, &nbytes );
 				totalBytes += nbytes;
-			  	printf("%d wrote\n", myrank);
+//			  	printf("%d wrote\n", myrank);
 		  	}
 
 		}
@@ -109,9 +115,9 @@ int writeFile(dataBlock *datum, int count, int level, int all) {
 		//If I am a bridge node, receive data from the new senders
 		else if (bridgeNodeInfo[1] == 1) {
 
-			  printf("%d am a BN\n", myrank);
+		//	  printf("%d am a BN\n", myrank);
 
-				int arrayLength = myWeight;
+				int arrayLength = myWeight;	//*ppn;
 
 				MPI_Request req[arrayLength], wrequest[myWeight+1];
 				MPI_Status stat, wstatus[myWeight+1];
@@ -140,13 +146,13 @@ int writeFile(dataBlock *datum, int count, int level, int all) {
 
 #pragma omp parallel for
 				// Post the nonblocking receives for my senders
-				for (i=0; i<myWeight ; i++) {
+				for (i=0; i<arrayLength ; i++) {
 					MPI_Irecv (shuffledNodesData[i], count, MPI_DOUBLE, shuffledNodes[i], myrank, MPI_COMM_WORLD, &req[i]); 
 				}
 
           test1 = MPI_Wtime();
 #pragma omp parallel for
-				for (i=0; i<myWeight ; i++) {
+				for (i=0; i<arrayLength ; i++) {
 					int idx;
 					MPI_Waitany (myWeight, req, &idx, &stat);
 					//result = MPI_File_iwrite_at (fileHandle, shuffledNodes[idx]*count*sizeof(double), shuffledNodesData[idx], count, MPI_DOUBLE, &wrequest[idx]);
@@ -193,7 +199,7 @@ int writeFile(dataBlock *datum, int count, int level, int all) {
 				//result = MPI_File_write_all (fileHandle, datumBuffer, 1, MPI_DOUBLE, &status);
 
 				tIOEnd = MPI_Wtime()-tIOStart;
-			  printf("%d %d B %d BN write time %lf test2=%lf\n", myrank, fileSize, level, tIOEnd, test2);
+//			  printf("%d %d B %d BN write time %lf test2=%lf\n", myrank, fileSize, level, tIOEnd, test2);
 			}
 
 			//	MPI_Reduce(&tIOEnd, &Tmax, 1, MPI_DOUBLE, MPI_MAX, rootps, MPI_COMM_WORLD);
@@ -226,7 +232,7 @@ int writeFile(dataBlock *datum, int count, int level, int all) {
 //				MPI_Wait(&wrequest, &status);
 
 				end = MPI_Wtime()-start;
-				printf("%d %d %d all write time %lf\n", myrank, fileSize, level, end);
+	//			printf("%d %d %d all write time %lf\n", myrank, fileSize, level, end);
 
 		//		MPI_Reduce(&end, &Tmax, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 		//		MPI_Reduce(&end, &Tmin, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
@@ -599,7 +605,7 @@ void formBridgeNodesRoutes () {
 
 	int i, j, bn, result;
 	double tStart, tEnd;
-	int root = floor(myrank/MidplaneSize);
+	int root = floor(myrank/(MidplaneSize*ppn));
 
 //	int numBridgeNodes = 8; 		// TODO Number of bridge nodes?
 //	int bridgeRanks[numBridgeNodes];
@@ -626,7 +632,7 @@ void formBridgeNodesRoutes () {
 		if (result != MPI_SUCCESS) 
 			prnerror (result, "MPI_Waitall Error: ");
 		
-	  	for (i=0; i<numBridgeNodes ; i++) {
+	  for (i=0; i<numBridgeNodes ; i++) {
 		
 			//Introduce all bridge nodes to each other
 			result = MPI_Isend (bridgeRanks, numBridgeNodes, MPI_INT, bridgeRanks[i], 101, MPI_COMM_WORLD, &request[i]);
@@ -634,6 +640,7 @@ void formBridgeNodesRoutes () {
 				prnerror (result, "MPI_Isend Error: ");
 
 			//Send all nodes' bridgeNodeInfo to all bridge nodes//TODO hardcoded 512
+			//Processe on same node by default have the same bridge node
 			result = MPI_Isend (bridgeNodeAll, 2*MidplaneSize, MPI_INT, bridgeRanks[i], 102, MPI_COMM_WORLD, &requestAll[i]);
 			if (result != MPI_SUCCESS) 
 				prnerror (result, "MPI_Isend Error: ");
@@ -656,7 +663,8 @@ void formBridgeNodesRoutes () {
 		MPI_Recv(newBridgeNode, MidplaneSize, MPI_INT, bridgeRanks[0], bridgeRanks[0], MPI_COMM_WORLD, &st);	
 	}
 	
-	if (bridgeNodeInfo[1] == 1) {
+	//process on Bridge node core 0
+	if (bridgeNodeInfo[1] == 1 && coreID == 0) {
 
 		MPI_Request requestSend, requestRecv, requestRecvAll;
 		MPI_Status statusSend, statusRecv, statusRecvAll;
@@ -941,6 +949,11 @@ int main (int argc, char **argv) {
 		for (i=0 ; i<numBridgeNodes ; i++)
 			depthInfo[i] = new uint8_t[MidplaneSize];
 
+		bridgeRanks = new int [numBridgeNodes];
+		avgWeight = new float [numBridgeNodes];
+
+		rootNodeList = new queue<Node *> [numBridgeNodes];
+
 		double tStart = MPI_Wtime();	//entire execution
 
 //TODO if I am on core 0
@@ -948,28 +961,29 @@ int main (int argc, char **argv) {
 
 		initTree(numBridgeNodes);
 
-#ifdef DEBUG
-		printf("%d: mybridgeNodeInfo: %d %d\n", myrank, bridgeNodeInfo[0], bridgeNodeInfo[1]);
-#endif 
-		//gather bridgeNodeInfo at the root
-		//int bridgeNodeAll[512*2];				//2 integers per rank
-		double ts = MPI_Wtime();
-//TODO per partition create sub comm for core0
-//TODO if I am on core 0
-		MPI_Gather (bridgeNodeInfo, 2, MPI_INT, bridgeNodeAll, 2, MPI_INT, 0, MPI_COMM_WORLD);
-		ts = MPI_Wtime() - ts;
-#ifdef DEBUG
-		if (myrank == 0)
-			printf("%d: bridgeNodeInfo %d %d %d %d %lf\n", myrank, bridgeNodeAll[2], bridgeNodeAll[3], bridgeNodeAll[6], bridgeNodeAll[7], ts);
-#endif
+		//form intra-communicator - mainly reqd for core 0 processes 
+		MPI_Comm_split (MPI_COMM_WORLD, coreID, myrank, &MPI_COMM_core);
 
 		//form intra-communicator - mainly reqd for bridge nodes
 		MPI_Comm_split (MPI_COMM_WORLD, bridgeNodeInfo[1], myrank, &COMM_BRIDGE_NODES);
+
+		//gather bridgeNodeInfo at the root
+		double ts = MPI_Wtime();
+		if (coreID == 0)	MPI_Gather (bridgeNodeInfo, 2, MPI_INT, bridgeNodeAll, 2, MPI_INT, rootps, MPI_COMM_core);
+		ts = MPI_Wtime() - ts;
+
+#ifdef DEBUG
+		printf("%d: mybridgeNodeInfo: %d %d\n", myrank, bridgeNodeInfo[0], bridgeNodeInfo[1]);
+		if (myrank == 0)
+			printf("%d: bridgeNodeInfo %d %d %d %d %lf\n", myrank, bridgeNodeAll[2], bridgeNodeAll[3], bridgeNodeAll[6], bridgeNodeAll[7], ts);
+#endif
 
 		double tOStart = MPI_Wtime();
 		formBridgeNodesRoutes ();
 		double tOEnd = MPI_Wtime();
 
+		printf("%d: new %d\n", myrank, newBridgeNode[myrank/ppn]);
+	
 		//printf("%d: overhead %6.3f\n", myrank, tOEnd-tOStart);
 
 		int count = fileSize;				//weak scaling
@@ -983,28 +997,34 @@ int main (int argc, char **argv) {
 		 * * * * * * * * * * * * * * * * * * * * * Independent MPI-IO to IO nodes from all compute nodes - shared file * * * * * * * * * * * * * * * * * *
 		 */
 
+		double tION[2];
+
 		/* open file */
 		mode = MPI_MODE_CREATE | MPI_MODE_WRONLY;
-		//MPI_File_open (COMM_BRIDGE_NODES, fileNameION, mode, MPI_INFO_NULL, &fileHandle);
-		MPI_File_open (MPI_COMM_WORLD, fileNameION, mode, MPI_INFO_NULL, &fileHandle);
 
 		/* allocate buffer */
 		datum->allocElement (1);
 
+		//MPI_File_open (COMM_BRIDGE_NODES, fileNameION, mode, MPI_INFO_NULL, &fileHandle);
+		MPI_File_open (MPI_COMM_WORLD, fileNameION, mode, MPI_INFO_NULL, &fileHandle);
 		tIOStart = MPI_Wtime();
-//		totalBytes[0][0] += writeFile(datum, count, 0, 0);			
+		totalBytes[0][0] += writeFile(datum, count, 0);			
+		totalBytes[0][0] += writeFile(datum, count, 0);			
+		totalBytes[0][0] += writeFile(datum, count, 0);			
+		totalBytes[0][0] += writeFile(datum, count, 0);			
 		tIOEnd = MPI_Wtime();
-		double tION_elapsed_0 = tIOEnd - tIOStart;
-
+		tION[0] = tIOEnd - tIOStart;
 		/* close file */
 		MPI_File_close (&fileHandle);
 
 		MPI_File_open (MPI_COMM_WORLD, fileNameION, mode, MPI_INFO_NULL, &fileHandle);
 		tIOStart = MPI_Wtime();
-//		totalBytes[0][1] += writeFile(datum, count, 0, 1);
+		totalBytes[0][1] += writeFile(datum, count, 1);
+		totalBytes[0][1] += writeFile(datum, count, 1);
+		totalBytes[0][1] += writeFile(datum, count, 1);
+		totalBytes[0][1] += writeFile(datum, count, 1);
 		tIOEnd = MPI_Wtime();
-		double tION_elapsed_1 = tIOEnd - tIOStart;
-
+		tION[1] = tIOEnd - tIOStart;
 		/* close file */
 		MPI_File_close (&fileHandle);
 
@@ -1014,23 +1034,24 @@ int main (int argc, char **argv) {
 
 		double te[2];
 
-		MPI_File_open (MPI_COMM_WORLD, fileNameFS, mode, MPI_INFO_NULL, &fileHandle);
-		double t2 = MPI_Wtime();
-		totalBytes[1][1] += writeFile(datum, count, 1, 1);
-		totalBytes[1][1] += writeFile(datum, count, 1, 1);
-		totalBytes[1][1] += writeFile(datum, count, 1, 1);
-		totalBytes[1][1] += writeFile(datum, count, 1, 1);
-		te[1] = MPI_Wtime() - t2;
-		MPI_File_close (&fileHandle);
-
 		mode = MPI_MODE_CREATE | MPI_MODE_WRONLY;
+
 		MPI_File_open (COMM_BRIDGE_NODES, fileNameFSBN, mode, MPI_INFO_NULL, &fileHandle);
 		double t1 = MPI_Wtime();
-		totalBytes[1][0] += writeFile(datum, count, 1, 0);
-		totalBytes[1][0] += writeFile(datum, count, 1, 0);
-		totalBytes[1][0] += writeFile(datum, count, 1, 0);
-		totalBytes[1][0] += writeFile(datum, count, 1, 0);
+		totalBytes[1][0] += writeFile(datum, count, 0);
+		totalBytes[1][0] += writeFile(datum, count, 0);
+		totalBytes[1][0] += writeFile(datum, count, 0);
+		totalBytes[1][0] += writeFile(datum, count, 0);
 		te[0] = MPI_Wtime() - t1;
+		MPI_File_close (&fileHandle);
+
+		MPI_File_open (MPI_COMM_WORLD, fileNameFS, mode, MPI_INFO_NULL, &fileHandle);
+		double t2 = MPI_Wtime();
+		totalBytes[1][1] += writeFile(datum, count, 1);
+		totalBytes[1][1] += writeFile(datum, count, 1);
+		totalBytes[1][1] += writeFile(datum, count, 1);
+		totalBytes[1][1] += writeFile(datum, count, 1);
+		te[1] = MPI_Wtime() - t2;
 		MPI_File_close (&fileHandle);
 
 		/* free buffer */
@@ -1040,16 +1061,21 @@ int main (int argc, char **argv) {
 
 		double tEnd = MPI_Wtime();
 		
-		double max[2];
+		double max[4];
+
 		MPI_Reduce(&te[0], &max[0], 1, MPI_DOUBLE, MPI_MAX, rootps, MPI_COMM_WORLD);
 		MPI_Reduce(&te[1], &max[1], 1, MPI_DOUBLE, MPI_MAX, rootps, MPI_COMM_WORLD);
+
+		MPI_Reduce(&tION[0], &max[2], 1, MPI_DOUBLE, MPI_MAX, rootps, MPI_COMM_WORLD);
+		MPI_Reduce(&tION[1], &max[3], 1, MPI_DOUBLE, MPI_MAX, rootps, MPI_COMM_WORLD);
 
 		MPI_Finalize ();
 
 		if (myrank == rootps) {
-			printf ("Finally: %d %lf %lf\n", 4*fileSize, max[0], max[1]);
-			printf ("Times: %d %4.2f %4.2f %4.2f %d %6.3f\n", myrank, totalBytes[0][0]*1.0/oneMB, tION_elapsed_0, tION_elapsed_1, bridgeNodeInfo[0], tEnd-tStart);   // rank, MB, MB, sec..
+			printf ("Times: %d | %lf %lf | %lf %lf\n", 4*fileSize, max[0], max[1], max[2], max[3]);
+			//printf ("Times: %d %4.2f %4.2f %4.2f %d %6.3f\n", myrank, totalBytes[0][0]*1.0/oneMB, tION_elapsed_0, tION_elapsed_1, bridgeNodeInfo[0], tEnd-tStart);   // rank, MB, MB, sec..
 		}
+
 		return 0;
 
 }
