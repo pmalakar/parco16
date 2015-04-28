@@ -6,8 +6,15 @@
 #include "neighbour.h"
 
 //Variables
-int neighbourRanks[MidplaneSize][10];
+int **neighbourRanks;	//[MidplaneSize][10];
+int NUM_NEIGHBOURS=10;
 //int **neighbourRanks;
+
+void initNeighbours() {
+	neighbourRanks = new int * [MidplaneSize*ppn];
+	for (int i=0 ; i<MidplaneSize*ppn ; i++)
+		neighbourRanks[i] = new int[NUM_NEIGHBOURS];
+}
 
 //neighbour 2D array
 //neighbour [0]  a+ b c d e t
