@@ -18,7 +18,7 @@ extern MPIX_Hardware_t hw;
 /*
  * Ranks per node, Core ID (0...15) 
  */ 
-extern int ppn, coreID;
+extern int ppn, coreID, nodeID;
 
 /*
  * Size of each dimension 

@@ -27,7 +27,7 @@ MPIX_Hardware_t hw;
 /*
  * Ranks per node, Core ID (0...15) 
  */ 
-int ppn, coreID;
+int ppn, coreID, nodeID;
 
 /*
  * Size of each dimension 
@@ -55,13 +55,14 @@ int *routingOrder;
  * - get ranks per node
  * - get routing order
  */
-void initSystemParameters() {
+void initSystemParameters(int myrank) {
 
   int i;
 
 	MPIX_Hardware(&hw);
 	ppn = hw.ppn;
   coreID = hw.coreID;	
+  nodeID = myrank/ppn;
 
 	routingOrder = new int[MPIX_TORUS_MAX_DIMS];
 	getRoutingOrder(routingOrder);
@@ -81,7 +82,7 @@ void getPersonality (int myrank) {
 	//local variables
 	int i;
 
-	initSystemParameters();
+	initSystemParameters(myrank);
 
 #ifdef DEBUG
 	printf("Torus dimensions = (%u,%u,%u,%u,%u) Routing order = (%d,%d,%d,%d,%d)\n", hw.Size[0], hw.Size[1], hw.Size[2], hw.Size[3], hw.Size[4], routingOrder[0], routingOrder[1], routingOrder[2], routingOrder[3], routingOrder[4]);
