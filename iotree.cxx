@@ -1112,7 +1112,7 @@ int main (int argc, char **argv) {
 		MPI_Finalize ();
 
 		if (myrank == rootps) {
-			printf ("Times: %d %d # %d | %lf %lf | %lf %lf\n", commsize, ppn, 4*fileSize, max[0], max[1], max[2], max[3]);
+			printf ("Times: %d %d %d # %d | %lf %lf | %lf %lf\n", commsize, ppn, omp_get_num_threads(), 4*fileSize, max[0], max[1], max[2], max[3]);
 			//printf ("Times: %d %4.2f %4.2f %4.2f %d %6.3f\n", myrank, totalBytes[0][0]*1.0/oneMB, tION_elapsed_0, tION_elapsed_1, bridgeNodeInfo[0], tEnd-tStart);   // rank, MB, MB, sec..
 		}
 
