@@ -50,6 +50,12 @@ int bridgeNodeInfo[2];
  */
 int *routingOrder;
 
+
+inline int min (int x, int y) {
+  return x<y? x: y;
+}
+
+
 /*
  * Initialize system parameters
  * - get ranks per node
@@ -81,6 +87,7 @@ void getPersonality (int myrank) {
 		
 	//local variables
 	int i;
+  int unitHop = 1;
 
 	initSystemParameters(myrank);
 
@@ -115,24 +122,24 @@ void getPersonality (int myrank) {
 			int dimID = routingOrder[dim];
 			hopDiff = abs(bridgeCoords[dimID] - hw.Coords[dimID]);
 
-			if (hw.isTorus[dimID] == 1 && (hopDiff*2 > hw.Size[dimID])) {
-		//			printf("hopDiff earlier rank %d size[%d] %d hops %d\n", myrank, dimID, hw.Size[dimID], hopDiff);
-					hopDiff = hw.Size[dimID] - hopDiff ;//+ 1;		//torus dimension
-		//			printf("hopDiff later rank %d hops %d current hopnum=%d\n", myrank, hopDiff, hopnum);
-			}
+		//	if (hw.isTorus[dimID] == 1 && (hopDiff*2 > hw.Size[dimID])) 
+		//			hopDiff = hw.Size[dimID] - hopDiff ;
+			
+			if (hw.isTorus[dimID] == 1) 
+					hopDiff = min (hopDiff, hw.Size[dimID] - hopDiff) ;
+
 #ifdef DEBUG
 			printf("SD %d to %d Difference in dim %d = %d\n", myrank, bridgeNodeInfo[0], dimID, hopDiff);
 #endif
 
 			for(int diff=0; diff<hopDiff ;diff++) {
-				int unitHop = 1;
 				if (hw.isTorus[dimID] == 0) {
 					if(bridgeCoords[dimID] < hw.Coords[dimID]) intmdt_coords[dimID] -= unitHop;  
 					else intmdt_coords[dimID] += unitHop;
 				}
 				else {		// torus
 					if (abs(bridgeCoords[dimID] - hw.Coords[dimID])*2 > hw.Size[dimID]) {
-						printf("check > %d bridgecoords[%d]=%d hw.Coords[%d]=%d hw.Size[%d]=%d\n", myrank, dimID, bridgeCoords[dimID], dimID, hw.Coords[dimID], dimID, hw.Size[dimID]);
+					//	printf("check > %d bridgecoords[%d]=%d hw.Coords[%d]=%d hw.Size[%d]=%d\n", myrank, dimID, bridgeCoords[dimID], dimID, hw.Coords[dimID], dimID, hw.Size[dimID]);
 
 						if (bridgeCoords[dimID] > hw.Coords[dimID]) 
 										intmdt_coords[dimID] = ((intmdt_coords[dimID] - unitHop) + hw.Size[dimID]) % hw.Size[dimID];  
@@ -140,7 +147,7 @@ void getPersonality (int myrank) {
 										intmdt_coords[dimID] = (intmdt_coords[dimID] + unitHop) % hw.Size[dimID];
 					}
 					else if (abs(bridgeCoords[dimID] - hw.Coords[dimID])*2 < hw.Size[dimID]) {
-						printf("check < %d bridgecoords[%d]=%d hw.Coords[%d]=%d hw.Size[%d]=%d\n", myrank, dimID, bridgeCoords[dimID], dimID, hw.Coords[dimID], dimID, hw.Size[dimID]);
+					//	printf("check < %d bridgecoords[%d]=%d hw.Coords[%d]=%d hw.Size[%d]=%d\n", myrank, dimID, bridgeCoords[dimID], dimID, hw.Coords[dimID], dimID, hw.Size[dimID]);
 						if (bridgeCoords[dimID] < hw.Coords[dimID]) 
 										intmdt_coords[dimID] = ((intmdt_coords[dimID] - unitHop) + hw.Size[dimID]) % hw.Size[dimID];  
 						else 
@@ -183,4 +190,5 @@ void getPersonality (int myrank) {
 		return;
 
 }
+
 
