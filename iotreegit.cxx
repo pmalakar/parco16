@@ -40,11 +40,11 @@ int *bridgeRanks; 						//	[numBridgeNodes];
 uint8_t bridgeNodeCurrIdx;
 
 MPI_Comm COMM_BRIDGE_NODES, MPI_COMM_core, MPI_COMM_NODE;
-#ifdef CETUS
+//#ifdef CETUS
 const int numBridgeNodes = 8;		//cetus/mira 
-#else
-const int numBridgeNodes = 32; 	//vesta
-#endif
+//#else
+//const int numBridgeNodes = 32; 	//vesta
+//#endif
 
 float *avgWeight;			//[numBridgeNodes];
 
@@ -85,7 +85,6 @@ int writeFile(dataBlock *datum, int count, int all) {
 
 	// Optimized independent I/O
 	if (all == 0) {
-
 
 #ifdef DEBUG
 	 	if (coreID == 0) printf("%d:%d: called writeFile: %d %d %d %d\n", myrank, coreID, newBridgeNode[myrank], bridgeRanks[newBridgeNode[myrank]], bridgeNodeInfo[0], bridgeNodeInfo[1]);
@@ -155,7 +154,6 @@ int writeFile(dataBlock *datum, int count, int all) {
 				}
 				else {
 			//		shuffledNodesData = new double *[arrayLength];
-					printf ("%d: about to allocate %d * %d bytes\n", arrayLength, count);
 					for (int i=0; i<arrayLength; i++) shuffledNodesData[i] = new double[count];
 				}
 
@@ -910,7 +908,7 @@ void distributeInfo() {
 				printf ("%d: checking: %d %d %d %d %d\n", myrank, nodeID, coreID, j, bridgeRanks[newBridgeNode[j]], bridgeNodeAll[j*2+1]);
 #endif
 			//if (bridgeRanks[newBridgeNode[j]] == myrank && bridgeNodeAll[j*2+1]>1) {
-			if (newBridgeNode[j] >= 0 && bridgeRanks[newBridgeNode[j]] == nodeID*ppn && bridgeNodeAll[j*2+1]>1) {
+			if (bridgeRanks[newBridgeNode[j]] == nodeID*ppn && bridgeNodeAll[j*2+1]>1) {
 				k++;
 				shuffledNodes[k] = j+coreID;
 #ifdef DEBUG
@@ -922,11 +920,6 @@ void distributeInfo() {
 #ifdef DEBUG
 		if (k+1 != myWeight) printf("%d: Error in number of shuffledNodes: %d %d\n", myrank, k, myWeight);
 #endif
-//
-
-//		for (j=0; j<MidplaneSize*ppn ; j++) 
-//			if (newBridgeNode[j] >= 0)
-//				printf("%d: %d (%d) is the new BN for %d\n", myrank, bridgeRanks[newBridgeNode[j]], newBridgeNode[j], j);
 
 }
 
@@ -1117,10 +1110,8 @@ int main (int argc, char **argv) {
 
 		MPI_Finalize ();
 
-		if (myrank == rootps) {
+		if (myrank == rootps) 
 			printf ("Times: %d %d %d # %d | %lf %lf | %lf %lf\n", commsize, ppn, omp_get_num_threads(), 8*fileSize, max[0], max[1], max[2], max[3]);
-			//printf ("Times: %d %4.2f %4.2f %4.2f %d %6.3f\n", myrank, totalBytes[0][0]*1.0/oneMB, tION_elapsed_0, tION_elapsed_1, bridgeNodeInfo[0], tEnd-tStart);   // rank, MB, MB, sec..
-		}
 
 		return 0;
 
