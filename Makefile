@@ -2,7 +2,11 @@ CC=mpixlc
 CXX=mpixlcxx
 
 CFLAGS=-O3 -g
-DEBUG=-DDEBUG
+DEBUG=-DCETUS #-DDEBUG
+LIBMPI=-L/soft/perftools/hpctw/lib -lmpihpm -L/bgsys/drivers/ppcfloor/bgpm/lib -lbgpm -lrt -lstdc++ 
+LIBUTILS=#-L/home/preeti/lib -lmem
+LIBS=$(LIBUTILS) $(LIBMPI) 
+INC=#-I/home/preeti/inc
 
 SRCS = 	route.cxx \
 		personality.cxx \
@@ -17,10 +21,10 @@ all:    $(TARGET)
 		@echo Compilation done.
 
 %.o:%.cxx
-		$(CXX) $(CFLAGS) -c $< -o $@
+		$(CXX) $(CFLAGS) -c $< -o $@ -DBGQ $(INC) $(DEBUG) $(LIBS)
 
 $(TARGET): $(OBJS) 
-		$(CXX) $(CFLAGS) -o $(TARGET) $(DEBUG) $(OBJS) $(LIBS)
+		$(CXX) $(CFLAGS) -o $(TARGET) -DBGQ $(INC) $(DEBUG) $(LIBS) $(OBJS) 
 
 clean:
 		$(RM) *.o *~
