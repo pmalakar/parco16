@@ -155,6 +155,7 @@ int writeFile(dataBlock *datum, int count, int all) {
 				}
 				else {
 			//		shuffledNodesData = new double *[arrayLength];
+					printf ("%d: about to allocate %d * %d bytes\n", arrayLength, count);
 					for (int i=0; i<arrayLength; i++) shuffledNodesData[i] = new double[count];
 				}
 
@@ -909,7 +910,7 @@ void distributeInfo() {
 				printf ("%d: checking: %d %d %d %d %d\n", myrank, nodeID, coreID, j, bridgeRanks[newBridgeNode[j]], bridgeNodeAll[j*2+1]);
 #endif
 			//if (bridgeRanks[newBridgeNode[j]] == myrank && bridgeNodeAll[j*2+1]>1) {
-			if (bridgeRanks[newBridgeNode[j]] == nodeID*ppn && bridgeNodeAll[j*2+1]>1) {
+			if (newBridgeNode[j] >= 0 && bridgeRanks[newBridgeNode[j]] == nodeID*ppn && bridgeNodeAll[j*2+1]>1) {
 				k++;
 				shuffledNodes[k] = j+coreID;
 #ifdef DEBUG
