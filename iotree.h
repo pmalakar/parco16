@@ -90,7 +90,7 @@ int writeFlag=1;
 int oneKB = 1024;
 int oneMB = 1024*1024;
 int myrank, commsize, mode, fileSize;
-int totalBytes[2][2] = {0};
+int totalBytes[2][3] = {0};
 
 MPI_File fileHandle;
 MPI_Status status;
@@ -98,6 +98,7 @@ MPI_Request request;
 char *fileNameION = "/dev/null";
 char *fileNameFS = "dummyFile";
 char *fileNameFSBN = "dummyFileBN";
+char *fileNameFSCO = "dummyFileCO";
 
 double tIOStart, tIOEnd;
 double tION_elapsed[2]={0.0,0.0}, tFS_elapsed[2]={0.0,0.0};
@@ -207,11 +208,15 @@ void alloc_free (dataBlock *datum, int type) {
 }
 
 
-void prnerror (int error, char *string)
+void prnerror (int error_code, char *string)
 {
-    fprintf(stderr, "Error %d in %s\n", error, string);
-    MPI_Finalize();
-    exit(-1);
+	
+	char error_string[256];
+	int length_of_error_string;	
+	MPI_Error_string(error_code, error_string, &length_of_error_string);
+	fprintf(stderr, "%3d: %s in %s\n", error_code, error_string, string);
+	MPI_Finalize();
+	exit(-1);
 }
 
 int min (int a, int b) {
