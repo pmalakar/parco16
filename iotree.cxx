@@ -55,7 +55,7 @@ queue <Node *> *rootNodeList;	//[numBridgeNodes];
 Node **bridgeNodeRootList;
 
 int SKIP = 10;
-int MAXTIMES = 100;
+int MAXTIMES = 50;
 int MAXTIMESD = 10;
 
 int BLOCKING;
@@ -124,9 +124,9 @@ int writeFile(dataBlock *datum, int count, int all) {
 
 			//If I have not been assigned a new bridge node, write 
 		  	else {
-//#ifdef DEBUG
+#ifdef DEBUG
 				printf("%d will write %d doubles\n", myrank, count);
-//#endif
+#endif
 				result = MPI_File_write_at (fileHandle, (MPI_Offset)myrank*count*sizeof(double), datum->getAlphaBuffer(), count, MPI_DOUBLE, &status);
 				if (result != MPI_SUCCESS) 
 					prnerror (result, "nonBN MPI_File_write_at Error:");
@@ -155,8 +155,10 @@ int writeFile(dataBlock *datum, int count, int all) {
 				}
 				else {
 			//		shuffledNodesData = new double *[arrayLength];
+#ifdef DEBUG
 					if (myrank == bridgeRanks[0])
 						printf ("%d: about to allocate %d * %d bytes\n", myrank, arrayLength, count);
+#endif
 					for (int i=0; i<arrayLength; i++) shuffledNodesData[i] = new double[count];
 				}
 
