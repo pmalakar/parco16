@@ -54,9 +54,9 @@ queue <Node *> *rootNodeList;	//[numBridgeNodes];
 
 Node **bridgeNodeRootList;
 
-int SKIP = 10;
-int MAXTIMES = 50;
-int MAXTIMESD = 10;
+int SKIP = 1;
+int MAXTIMES = 5;
+int MAXTIMESD = 1;
 
 int BLOCKING;
 bool coalesced = false ; ///true;
@@ -99,18 +99,23 @@ int writeFile(dataBlock *datum, int count, int all) {
 		  	if(newBridgeNode[nodeID*ppn] != -1) {	
 					int	myBridgeRank = bridgeRanks[newBridgeNode[nodeID*ppn]] + coreID; 
 #ifdef DEBUG
-			  	printf("%d will send to %d\n", myrank, myBridgeRank);		//bridgeRanks[newBridgeNode[myrank]]);
+printf("%d will send to %d\n", myrank, myBridgeRank);		//bridgeRanks[newBridgeNode[myrank]]);
 #endif
 
 					if (coalesced) {
 						double *dataPerNode;
 						if (coreID == 0)
 							dataPerNode = new double[count*ppn];
+
+printf("%d will gather\n", myrank);		//bridgeRanks[newBridgeNode[myrank]]);
 						MPI_Gather (datum->getAlphaBuffer(), count, MPI_DOUBLE, dataPerNode, count, MPI_DOUBLE, 0, MPI_COMM_NODE);
+
 						//only core 0 sends
 						if (coreID == 0) {
+printf("%d will send\n", myrank);		//bridgeRanks[newBridgeNode[myrank]]);
 							MPI_Isend (dataPerNode, count*ppn, MPI_DOUBLE, myBridgeRank, myBridgeRank, MPI_COMM_WORLD, &sendreq);	
 							MPI_Wait (&sendreq, &sendst);
+							free(dataPerNode);
 						}
 					}
 					else {
@@ -154,7 +159,6 @@ int writeFile(dataBlock *datum, int count, int all) {
 						for (int i=0; i<arrayLength; i++) shuffledNodesData[i] = new double[count*ppn];
 				}
 				else {
-			//		shuffledNodesData = new double *[arrayLength];
 #ifdef DEBUG
 					if (myrank == bridgeRanks[0])
 						printf ("%d: about to allocate %d * %d bytes\n", myrank, arrayLength, count);
@@ -169,14 +173,16 @@ int writeFile(dataBlock *datum, int count, int all) {
 						prnerror (result, "BN own MPI_File_write_at Error:");
 				}
 				else {
+#ifdef DEBUG
 					if (myrank == bridgeRanks[0])
 						printf("BN %d will write %d doubles req %d\n", myrank, count, myWeight);
+#endif
 					result = MPI_File_iwrite_at (fileHandle, (MPI_Offset)myrank*count*sizeof(double), datum->getAlphaBuffer(), count, MPI_DOUBLE, &wrequest[myWeight]);
 					//if (result != MPI_SUCCESS) 
 					//	prnerror (result, "BN own MPI_File_iwrite_at Error:");
 				}
-				MPI_Get_elements( &status, MPI_CHAR, &nbytes );
-				totalBytes += nbytes;
+		//		MPI_Get_elements( &status, MPI_CHAR, &nbytes );
+		//		totalBytes += nbytes;
 
 				int idx;
 				// Post the nonblocking receives for my senders
@@ -189,6 +195,7 @@ int writeFile(dataBlock *datum, int count, int all) {
 #pragma omp parallel for
 				for (i=0; i<arrayLength ; i++) {
 						MPI_Waitany (myWeight, req, &idx, &stat);
+						printf ("BN %d received data from %d\n", myrank, shuffledNodes[idx]);
 						if (BLOCKING == 1) {
 							result = MPI_File_write_at (fileHandle, (MPI_Offset)shuffledNodes[idx]*count*sizeof(double), shuffledNodesData[idx], count*ppn, MPI_DOUBLE, &status);
 							if (result != MPI_SUCCESS) 
@@ -211,6 +218,7 @@ int writeFile(dataBlock *datum, int count, int all) {
 					for (i=0; i<arrayLength ; i++) {
 						int idx;
 						MPI_Waitany (myWeight, req, &idx, &stat);
+						printf ("BN %d received data from %d\n", myrank, shuffledNodes[idx]);
 					
 						if (BLOCKING == 1) { 
 							result = MPI_File_write_at (fileHandle, (MPI_Offset)shuffledNodes[idx]*count*sizeof(double), shuffledNodesData[idx], count, MPI_DOUBLE, &status);
@@ -747,7 +755,9 @@ void formBridgeNodesRoutes () {
 
 		for (i=0; i<numBridgeNodes ; i++) { 
 			if (myrank == bridgeRanks[i]) myBNIdx = i;
+#ifdef DEBUG
 			printf("%d got it: %d\n", myrank, bridgeRanks[i]);		
+#endif
 		}
 
 		result = build5DTorus (rootps);
