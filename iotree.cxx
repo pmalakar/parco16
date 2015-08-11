@@ -31,6 +31,7 @@
 
 ///projects/Performance/preeti/utils
 #include "mem.h"
+#include "hwcnt.h"
 
 extern "C" void getMemStats(int, int);
 
@@ -95,7 +96,8 @@ int writeFile(dataBlock *datum, int count, int all) {
 	if (all == 0) {
 
 #ifdef DEBUG
-	 	if (coreID == 0) printf("%d:%d: called writeFile: %d %d %d %d\n", myrank, coreID, newBridgeNode[myrank], bridgeRanks[newBridgeNode[myrank]], bridgeNodeInfo[0], bridgeNodeInfo[1]);
+	 	if (coreID == 0) 
+			printf("%d:%d: called writeFile: %d %d %d %d\n", myrank, coreID, newBridgeNode[myrank], bridgeRanks[newBridgeNode[myrank]], bridgeNodeInfo[0], bridgeNodeInfo[1]);
 #endif
 
 		//If I am not a bridge node 
@@ -114,7 +116,9 @@ printf("%d will send to %d\n", myrank, myBridgeRank);		//bridgeRanks[newBridgeNo
 						if (coreID == 0)
 							dataPerNode = new double[count*ppn];
 
+#ifdef DEBUG
 printf("%d will gather\n", myrank);		//bridgeRanks[newBridgeNode[myrank]]);
+#endif
 fflush(stdout);
 
 						result = MPI_Gather (datum->getAlphaBuffer(), count, MPI_DOUBLE, dataPerNode, count, MPI_DOUBLE, 0, MPI_COMM_NODE);
@@ -206,7 +210,9 @@ printf("%d will send\n", myrank);		//bridgeRanks[newBridgeNode[myrank]]);
 #pragma omp parallel for
 				for (i=0; i<arrayLength ; i++) {
 						MPI_Waitany (myWeight, req, &idx, &stat);
+#ifdef DEBUG
 						printf ("BN %d received data from %d\n", myrank, shuffledNodes[idx]);
+#endif
 						if (BLOCKING == 1) {
 							result = MPI_File_write_at (fileHandle, (MPI_Offset)shuffledNodes[idx]*count*sizeof(double), shuffledNodesData[idx], count*ppn, MPI_DOUBLE, &status);
 							if (result != MPI_SUCCESS) 
@@ -229,7 +235,9 @@ printf("%d will send\n", myrank);		//bridgeRanks[newBridgeNode[myrank]]);
 					for (i=0; i<arrayLength ; i++) {
 						int idx;
 						MPI_Waitany (myWeight, req, &idx, &stat);
+#ifdef DEBUG
 						printf ("BN %d received data from %d\n", myrank, shuffledNodes[idx]);
+#endif
 					
 						if (BLOCKING == 1) { 
 							result = MPI_File_write_at (fileHandle, (MPI_Offset)shuffledNodes[idx]*count*sizeof(double), shuffledNodesData[idx], count, MPI_DOUBLE, &status);
@@ -417,7 +425,9 @@ int checkDefaultRoutes (int destination, Node *parentNode, int newNode, int myra
 			}
 			else {
 				flag = 0;
+#ifdef DEBUG
 				printf("%d: mismatch for %d: %d != %d destination %d\n", myrank, newNode, parentId, parent, destination);
+#endif
 				break;	
 			} 
 		}
@@ -1048,13 +1058,15 @@ int main (int argc, char **argv) {
 
 //TODO
 //	BLOCKING = atoi (argv[2]);
-		BLOCKING = 0;
+		BLOCKING = 0;			//non-blocking
 
 		if (atoi(argv[2]) == 0)
 			coalesced = false;
 		else
 			coalesced = true;
-		
+
+		int type = atoi(argv[3]);
+
 		int i, c;
 /*
 		opterr = 0;
@@ -1142,6 +1154,8 @@ int main (int argc, char **argv) {
 		int count = fileSize;				//weak scaling
 		dataBlock *datum = new dataBlock(count);			//initializes alpha array to random double values
 
+		bgpm_init();
+
 		//Testing BGQ compute nodes to IO nodes performance
 		//Write to /dev/null
 		//writeFlag = checkION();
@@ -1158,6 +1172,8 @@ int main (int argc, char **argv) {
 		/* allocate buffer */
 		datum->allocElement (1);
 
+		if (type == 1) {
+
 		MPI_File_open (MPI_COMM_WORLD, fileNameION, mode, MPI_INFO_NULL, &fileHandle);
 		for (int i=1; i<=SKIP; i++)
 			totalBytes[0][1] += writeFile(datum, count, 1);
@@ -1168,6 +1184,10 @@ int main (int argc, char **argv) {
 		tION[1] = (tIOEnd - tIOStart)/MAXTIMES;
 		MPI_File_close (&fileHandle);
 
+		}
+
+		else if (type == 0) {
+	
 		MPI_File_open (MPI_COMM_WORLD, fileNameION, mode, MPI_INFO_NULL, &fileHandle);
 		for (int i=1; i<=SKIP; i++)
 			totalBytes[0][0] += writeFile(datum, count, 0);
@@ -1178,6 +1198,8 @@ int main (int argc, char **argv) {
 		tION[0] = (tIOEnd - tIOStart)/MAXTIMES;
 		MPI_File_close (&fileHandle);
 
+		}
+
 		/*
 		 * * * * * * * * * * * * * * * * * * * * * Independent MPI-IO to file system from all compute nodes - shared file * * * * * * * * * * * * * * * * * *
 		 */
@@ -1185,6 +1207,8 @@ int main (int argc, char **argv) {
 		double te[3];
 
 		//mode = MPI_MODE_CREATE | MPI_MODE_WRONLY;
+
+		if (type == 1) {
 
 		MPI_File_open (MPI_COMM_WORLD, fileNameFS, mode, MPI_INFO_NULL, &fileHandle);
 		for (int i=1; i<=SKIP; i++)
@@ -1195,6 +1219,10 @@ int main (int argc, char **argv) {
 		te[1] = (MPI_Wtime() - t2)/MAXTIMESD;
 		MPI_File_close (&fileHandle);
 
+		}
+
+		else if (type == 2) {
+
 		MPI_File_open (MPI_COMM_WORLD, fileNameFSCO, mode, MPI_INFO_NULL, &fileHandle);
 		for (int i=1; i<=SKIP; i++)
 			totalBytes[1][2] += writeFile(datum, count, 2);
@@ -1203,6 +1231,10 @@ int main (int argc, char **argv) {
 			totalBytes[1][2] += writeFile(datum, count, 2);
 		te[2] = (MPI_Wtime() - t3)/MAXTIMESD;
 		MPI_File_close (&fileHandle);
+
+		}
+	
+		else if (type == 0) {
 
 		MPI_File_open (MPI_COMM_WORLD, fileNameFSBN, mode, MPI_INFO_NULL, &fileHandle);
 		for (int i=1; i<=SKIP; i++)
@@ -1213,10 +1245,14 @@ int main (int argc, char **argv) {
 		te[0] = (MPI_Wtime() - t1)/MAXTIMESD;
 		MPI_File_close (&fileHandle);
 
+		}
+
 		/* free buffer */
 		datum->freeElement (1);
 
 		//* * * * * * * * * * * * * * * * * * * * * * * * * * * End of IO * * * * * * * * * * * * * * * * * * * * * * * * * * *
+
+		bgpm_finalize();
 
 		double tEnd = MPI_Wtime();
 		
@@ -1231,9 +1267,12 @@ int main (int argc, char **argv) {
 		MPI_Finalize ();
 
 		if (myrank == rootps) {
-			printf ("Times: %d %d %d # %d | %lf %lf | %lf %lf %lf\n", commsize, ppn, omp_get_num_threads(), 8*fileSize, max[0], max[1], max[2], max[3], max[4]);
+			printf ("Times: %d: %d %d %d # %d | %lf %lf | %lf %lf %lf\n", commsize, type, ppn, omp_get_num_threads(), 8*fileSize, max[0], max[1], max[2], max[3], max[4]);
 			//printf ("Times: %d %4.2f %4.2f %4.2f %d %6.3f\n", myrank, totalBytes[0][0]*1.0/oneMB, tION_elapsed_0, tION_elapsed_1, bridgeNodeInfo[0], tEnd-tStart);   // rank, MB, MB, sec..
 		}
+
+    PrintCounts("NW", hNWSet, myrank);
+    PrintCounts("IO", hIOSet, myrank);
 
 		return 0;
 
