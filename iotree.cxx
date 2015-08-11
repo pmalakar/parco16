@@ -29,6 +29,11 @@
 #include "personality.h"
 #include "iotree.h"
 
+///projects/Performance/preeti/utils
+#include "mem.h"
+
+extern "C" void getMemStats(int, int);
+
 int rootps = 0;								// Default root process
 
 int *bridgeNodeAll; 					//[MidplaneSize*2];				//2 integers per rank
@@ -41,6 +46,8 @@ int *bridgeRanks; 						//	[numBridgeNodes];
 uint8_t bridgeNodeCurrIdx;
 
 MPI_Comm COMM_BRIDGE_NODES, MPI_COMM_core, MPI_COMM_NODE;
+MPI_Comm COMM_BRIDGE_NODES_core;
+
 #ifdef CETUS
 const int numBridgeNodes = 8;		//cetus/mira 
 #else
@@ -59,7 +66,7 @@ int MAXTIMES = 5;
 int MAXTIMESD = 1;
 
 int BLOCKING;
-bool coalesced = false ; ///true;
+bool coalesced;	//0 = false, 1 = true
 
 double Tmax, Tmin, Tmax_test2;
 
@@ -108,7 +115,11 @@ printf("%d will send to %d\n", myrank, myBridgeRank);		//bridgeRanks[newBridgeNo
 							dataPerNode = new double[count*ppn];
 
 printf("%d will gather\n", myrank);		//bridgeRanks[newBridgeNode[myrank]]);
-						MPI_Gather (datum->getAlphaBuffer(), count, MPI_DOUBLE, dataPerNode, count, MPI_DOUBLE, 0, MPI_COMM_NODE);
+fflush(stdout);
+
+						result = MPI_Gather (datum->getAlphaBuffer(), count, MPI_DOUBLE, dataPerNode, count, MPI_DOUBLE, 0, MPI_COMM_NODE);
+						if (result != MPI_SUCCESS) 
+								prnerror (result, "nonBN MPI_File_write_at Error:");
 
 						//only core 0 sends
 						if (coreID == 0) {
@@ -322,7 +333,8 @@ int build5DTorus (int root) {
 
 }
 
-
+//is BN on the default path?
+//check if network path from newNode (which is a neighbour of parentNode) to the BN (destination) is a path in the tree of children from BN 
 int checkDefaultRoutes (int destination, Node *parentNode, int newNode, int myrank) {
 
 	int coords[6], parentCoords[6], rootCoords[6], parentId, hopDiff=0;
@@ -347,7 +359,7 @@ int checkDefaultRoutes (int destination, Node *parentNode, int newNode, int myra
 		if (hw.isTorus[dimID] == 1 && (hopDiff*2 > hw.Size[dimID])) 
 			hopDiff = hw.Size[dimID] - hopDiff ;
 
-		for (int diff=0; diff<hopDiff ;diff++) {
+		for (int diff=0 ; diff<hopDiff ; diff++) {
 
 			parentId = current->getNodeId();
 
@@ -389,19 +401,25 @@ int checkDefaultRoutes (int destination, Node *parentNode, int newNode, int myra
 			
 			//is this the rank of the current?
 			if (parent == parentId) {
-				//printf("%d: match for %d: %d equals %d destination %d\n", myrank, newNode, parentId, parent, destination);
+#ifdef DEBUG
+				printf("%d: match for %d: intmdt_node %d = parent %d, destination= %d\n", myrank, newNode, parentId, parent, destination);
+#endif
 				current = current->getParent();
 #ifdef DEBUG
-				if (current == NULL)
-					printf("%d: root reached beforehand? error for %d\n", myrank, newNode);
+				if (current == NULL) {
+					if(parentId != destination)
+						printf("%d: root reached beforehand? error for %d\n", myrank, newNode);
+					else 
+						printf("%d: Did %d reach %d?\n", myrank, newNode, destination);
+					break;
+				}
 #endif
 			}
 			else {
 				flag = 0;
-				//printf("%d: mismatch for %d: %d != %d destination %d\n", myrank, newNode, parentId, parent, destination);
+				printf("%d: mismatch for %d: %d != %d destination %d\n", myrank, newNode, parentId, parent, destination);
 				break;	
 			} 
-				
 		}
 	}   
 
@@ -411,12 +429,24 @@ int checkDefaultRoutes (int destination, Node *parentNode, int newNode, int myra
 
 void traverse (int index, int level) {
 
+#ifdef DEBUG
+	printf ("%d: index=%d level=%d\n", myrank, index, level);
+	fflush(stdout);
+#endif
+
 	int i, child, nid, rid, nChildren, depth, bn, newDepth;
 
 	Node *node;
-	int count=0, lastCount = rootNodeList[index].size();	//get current count of the queue
+	int count=0;
+	int lastCount;
+	assert(index>=0 && index<numBridgeNodes);
+	assert(rootNodeList != NULL);
+
+	lastCount = rootNodeList[index].size();	//get current count of the queue
+		
 #ifdef DEBUG
 	printf ("%d: lastCount %d\n", myrank, lastCount);
+	fflush(stdout);
 #endif
 
 	while (count < lastCount) {
@@ -427,15 +457,19 @@ void traverse (int index, int level) {
 
 		for (i=0; i<nChildren; i++) {
 
+			assert(index>=0 && index<numBridgeNodes);
+			assert(rootNodeList != NULL);
+
 			rootNodeList[index].push (node->getChild(i));
 			child = node->getChildId(i);
 			depth = (node->getChild(i))->getDepth();
-			if (myrank == rid) { 
 #ifdef DEBUG
-				printf ("%d: Tally: %d = %d ?\n", depth, depthInfo[nid][child]);
-				printf("%d level %d : %d [%d] curr %d [%d] orig %d [%d]\n", rid, level, child, i, depth, nid, bridgeNodeAll[child*2+1], bridgeNodeAll[child*2]);
+//TODO seg fault
+//			if (myrank == rid) { 
+//				printf ("%d: Tally: %d = %d ?\n", myrank, depth, depthInfo[nid][child]);
+//				printf("%d level %d : %d [%d] curr %d [%d] orig %d [%d]\n", rid, level, child, i, depth, nid, bridgeNodeAll[child*2+1], bridgeNodeAll[child*2]);
+//			}
 #endif
-			}
 			//find the weighted min depth for child if not already processed
 			if (!processed[child]) {
 
@@ -505,23 +539,29 @@ void expandNode (Node *currentNodePtr) {
 		
 	int currentNode = currentNodePtr->getNodeId();
 	int rootid = root->getNodeId();
+
+#ifdef DEBUG	
+	printf ("%d: expandNode currentNode=%d rootid=%d\n", myrank, currentNode, rootid);
+#endif
+
 	short childNum=-1;
 	for (int j=8; j>=0; j--) {		//start with the lowest differing dimension neighbour to "hope 4" default path
 
 		// check all eligible neighbours
 		int localNode = neighbourRanks[currentNode][j] ;
-		if (myrank == bridgeRanks[bridgeNodeCurrIdx])
 #ifdef DEBUG
+		if (myrank == bridgeRanks[bridgeNodeCurrIdx])
 			printf ("%d: check for %d neighbour %d of %d\n", myrank, localNode, j, currentNode);
 #endif
 
-		//TODO continue if localNode is parent of currentNode... should not become cycle...
 		if (currentNodePtr != root && isParent(currentNodePtr, localNode) == true) continue;
 
 		if (visited[localNode] == false) {
+			//check if network path from localNode (which is a neighbour of currentNodePtr) to the BN (rootid) is a path in the tree of children from BN 
 			int success = checkDefaultRoutes(rootid, currentNodePtr, localNode, myrank);
-			//printf ("%d: success %d for check route from %d\n", myrank, success, localNode);
-
+#ifdef DEBUG
+			printf ("%d: success %d for check route from %d\n", myrank, success, localNode);
+#endif
 			if (success) {
 
 				childNum ++;
@@ -576,10 +616,13 @@ void expandNode (Node *currentNodePtr) {
 		//if (numNodes>63)		break;		//TEST: discover all
 	}
 
-	numNodes += childNum;
+	if (numNodes > 0)
+		numNodes += childNum;
 #ifdef DEBUG
-	printf("%d: numNodes %d childNum %d\n", myrank, numNodes, childNum);
-	if(!nodeList.empty()) printf("%d: queue size %d\n", myrank, nodeList.size());
+	if (myrank == bridgeRanks[bridgeNodeCurrIdx]) {
+		printf("%d: numNodes %d childNum %d\n", myrank, numNodes, childNum);
+		if(!nodeList.empty()) printf("%d: empty queue size %d\n", myrank, nodeList.size());
+	}
 #endif
 
 	//if (childNum != 3) printf ("%d: ERROR: childNum not 3 but %d\n", myrank, childNum);
@@ -593,6 +636,7 @@ int BAG = 64;
 		//no more expansion for this node?
 		while(!nodeList.empty())	nodeList.pop();	
 #ifdef DEBUG
+	if (myrank == bridgeRanks[bridgeNodeCurrIdx]) 
 		printf("%d: queue size %d\n", myrank, nodeList.size());
 #endif
 		return;
@@ -607,7 +651,7 @@ int BAG = 64;
 		}
 #ifdef DEBUG
 		else
-			printf("%d: nodeList empty\n");
+			printf("%d: nodeList empty\n", myrank);
 #endif
 	}
 
@@ -620,6 +664,7 @@ void buildTree (int currentNode) {
 	root = new Node (currentNode);
 	bridgeNodeRootList[++iter] = root;
 #ifdef DEBUG
+	getMemStats(myrank, 1);
 	printf("%d: expanding root %d\n", myrank, currentNode);
 #endif
 	expandNode (root);
@@ -802,15 +847,16 @@ void formBridgeNodesRoutes () {
 		printf("%d: buildTree overhead %6.3f\n", myrank, tEnd-tStart);
 #endif
 
-		//MPI_Barrier (COMM_BRIDGE_NODES);
+		MPI_Barrier (COMM_BRIDGE_NODES_core);
 
-		while(!nodeList.empty()) {
+		while(!(nodeList.empty())) 
 			nodeList.pop();
-		}
 
 #ifdef DEBUG
-		if (!nodeList.empty()) 
+		if (!(nodeList.empty())) 
 				printf("%d: Strange: i just emptied nodeList\n", myrank);	
+		else
+				printf("%d:%d nodeList is empty currentAvg=%d\n", myrank, coreID, currentAvg);	
 #endif
 
 		//traverse the trees 
@@ -825,7 +871,6 @@ void formBridgeNodesRoutes () {
 
 		int flag=1, level=0;
 		while (flag == 1) {
-
 			level++;
 			for (i=0; i<numBridgeNodes; i++) {
 				flag=0;
@@ -1005,7 +1050,13 @@ int main (int argc, char **argv) {
 //	BLOCKING = atoi (argv[2]);
 		BLOCKING = 0;
 
+		if (atoi(argv[2]) == 0)
+			coalesced = false;
+		else
+			coalesced = true;
+		
 		int i, c;
+/*
 		opterr = 0;
   	while ((c = getopt (argc, argv, "d:")) != -1)
     		switch (c)
@@ -1017,7 +1068,7 @@ int main (int argc, char **argv) {
         			//DEBUG = 0;
         			break;
 		}
-
+*/
 		double tAStart, tAEnd; 
 
 //TODO if I am on core 0
@@ -1056,6 +1107,8 @@ int main (int argc, char **argv) {
 
 		//form intra-communicator - mainly reqd for bridge nodes
 		MPI_Comm_split (MPI_COMM_WORLD, bridgeNodeInfo[1], myrank, &COMM_BRIDGE_NODES);
+		//form intra-communicator - mainly reqd for bridge nodes core wise
+		MPI_Comm_split (COMM_BRIDGE_NODES, coreID, myrank, &COMM_BRIDGE_NODES_core);
 
 		//gather bridgeNodeInfo at the rootps
 		double ts = MPI_Wtime();
