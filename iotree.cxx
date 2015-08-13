@@ -62,13 +62,15 @@ queue <Node *> *rootNodeList;	//[numBridgeNodes];
 
 Node **bridgeNodeRootList;
 
-int SKIP = 1;
-int MAXTIMES = 5;
-int MAXTIMESD = 1;
+int SKIP = 15;
+int MAXTIMES = 10;
+int MAXTIMESD = 10;
 
-int BLOCKING;
-bool coalesced;	//0 = false, 1 = true
+int coalesced;	//0=false, 1=true
+int blocking;	//0=nonblocking, 1=blocking
+int type;	//0=optimized independent, 1=independent, 2=collective
 
+double tstart, tend;
 double Tmax, Tmin, Tmax_test2;
 
 /*
@@ -78,8 +80,8 @@ double Tmax, Tmin, Tmax_test2;
  *  	- writes to IO node or file system
  *
  * 		all - 0 (optimized, only bridge nodes perform the write)
- * 		all - 1 (default, all the nodes perform the write)
- *
+ * 		all - 1 (default, independent write from all node)
+ * 		all - 2 (default, collective write from all nodes)
  */
 
 int writeFile(dataBlock *datum, int count, int all) {
@@ -102,8 +104,6 @@ int writeFile(dataBlock *datum, int count, int all) {
 
 		//If I am not a bridge node 
 		if (bridgeNodeInfo[1] > 1) {
-
-			//  printf("%d am not a bridge node, old BN %d, new BN %d\n", myrank, bridgeNodeInfo[1], newBridgeNode[myrank]);
 			//If I have been assigned a new bridge node 
 		  	if(newBridgeNode[nodeID*ppn] != -1) {	
 					int	myBridgeRank = bridgeRanks[newBridgeNode[nodeID*ppn]] + coreID; 
@@ -111,28 +111,34 @@ int writeFile(dataBlock *datum, int count, int all) {
 printf("%d will send to %d\n", myrank, myBridgeRank);		//bridgeRanks[newBridgeNode[myrank]]);
 #endif
 
-					if (coalesced) {
+					if (coalesced == 1) {
 						double *dataPerNode;
-						if (coreID == 0)
+						if (coreID == 0) {
 							dataPerNode = new double[count*ppn];
-
-#ifdef DEBUG
+							if (dataPerNode == NULL) printf("allocation error at %d\n", myrank);
+						}
+//#ifdef DEBUG
 printf("%d will gather\n", myrank);		//bridgeRanks[newBridgeNode[myrank]]);
-#endif
-fflush(stdout);
+//#endif
 
 						result = MPI_Gather (datum->getAlphaBuffer(), count, MPI_DOUBLE, dataPerNode, count, MPI_DOUBLE, 0, MPI_COMM_NODE);
 						if (result != MPI_SUCCESS) 
-								prnerror (result, "nonBN MPI_File_write_at Error:");
+								prnerror (result, "coalesced nonBN node MPI_Gather Error:");
 
 						//only core 0 sends
 						if (coreID == 0) {
-printf("%d will send\n", myrank);		//bridgeRanks[newBridgeNode[myrank]]);
-							MPI_Isend (dataPerNode, count*ppn, MPI_DOUBLE, myBridgeRank, myBridgeRank, MPI_COMM_WORLD, &sendreq);	
+//#ifdef DEBUG
+printf("%d will send to BN %d\n", myrank, myBridgeRank);		
+fflush(stdout);
+//#endif
+							result = MPI_Isend (dataPerNode, count*ppn, MPI_DOUBLE, myBridgeRank, myBridgeRank, MPI_COMM_WORLD, &sendreq);	
+							if (result != MPI_SUCCESS) 
+								prnerror (result, "coalesced nonBN node MPI_Isend Error:");
 							MPI_Wait (&sendreq, &sendst);
 							free(dataPerNode);
 						}
 					}
+					//no coalescing
 					else {
 						MPI_Isend (datum->getAlphaBuffer(), count, MPI_DOUBLE, myBridgeRank, myBridgeRank, MPI_COMM_WORLD, &sendreq);	
 						MPI_Wait (&sendreq, &sendst);
@@ -147,7 +153,13 @@ printf("%d will send\n", myrank);		//bridgeRanks[newBridgeNode[myrank]]);
 #ifdef DEBUG
 				printf("%d will write %d doubles\n", myrank, count);
 #endif
-				result = MPI_File_write_at (fileHandle, (MPI_Offset)myrank*count*sizeof(double), datum->getAlphaBuffer(), count, MPI_DOUBLE, &status);
+				if (blocking == 1) { 
+					result = MPI_File_write_at (fileHandle, (MPI_Offset)myrank*count*sizeof(double), datum->getAlphaBuffer(), count, MPI_DOUBLE, &status);
+				}
+				else {
+					result = MPI_File_iwrite_at (fileHandle, (MPI_Offset)myrank*count*sizeof(double), datum->getAlphaBuffer(), count, MPI_DOUBLE, &sendreq);
+					MPI_Wait (&sendreq, &sendst);
+				}	
 				if (result != MPI_SUCCESS) 
 					prnerror (result, "nonBN MPI_File_write_at Error:");
 				
@@ -169,7 +181,7 @@ printf("%d will send\n", myrank);		//bridgeRanks[newBridgeNode[myrank]]);
 
 				double **shuffledNodesData;
 				shuffledNodesData = new double *[arrayLength];
-				if (coalesced) {
+				if (coalesced == 1) {
 					if (coreID == 0) 
 						for (int i=0; i<arrayLength; i++) shuffledNodesData[i] = new double[count*ppn];
 				}
@@ -182,7 +194,9 @@ printf("%d will send\n", myrank);		//bridgeRanks[newBridgeNode[myrank]]);
 				}
 
 				// Write out my data first, before waiting for senders' data 
-				if (BLOCKING == 1) {
+				if (blocking == 1) {
+					assert(fileHandle);
+					assert(datum->getAlphaBuffer);
 					result = MPI_File_write_at (fileHandle, (MPI_Offset)myrank*count*sizeof(double), datum->getAlphaBuffer(), count, MPI_DOUBLE, &status);
 					if (result != MPI_SUCCESS) 
 						prnerror (result, "BN own MPI_File_write_at Error:");
@@ -201,7 +215,7 @@ printf("%d will send\n", myrank);		//bridgeRanks[newBridgeNode[myrank]]);
 
 				int idx;
 				// Post the nonblocking receives for my senders
-				if (coalesced) {
+				if (coalesced == 1) {
 					if (coreID == 0) {
  
 				 for (i=0; i<arrayLength ; i++) 
@@ -210,10 +224,10 @@ printf("%d will send\n", myrank);		//bridgeRanks[newBridgeNode[myrank]]);
 #pragma omp parallel for
 				for (i=0; i<arrayLength ; i++) {
 						MPI_Waitany (myWeight, req, &idx, &stat);
-#ifdef DEBUG
+//#ifdef DEBUG
 						printf ("BN %d received data from %d\n", myrank, shuffledNodes[idx]);
-#endif
-						if (BLOCKING == 1) {
+//#endif
+						if (blocking == 1) {
 							result = MPI_File_write_at (fileHandle, (MPI_Offset)shuffledNodes[idx]*count*sizeof(double), shuffledNodesData[idx], count*ppn, MPI_DOUBLE, &status);
 							if (result != MPI_SUCCESS) 
 								prnerror (result, "BN for nonBN MPI_File_write_at Error:");
@@ -224,10 +238,11 @@ printf("%d will send\n", myrank);		//bridgeRanks[newBridgeNode[myrank]]);
 						//		prnerror (result, "BN for nonBN MPI_File_iwrite_at Error:");
 						}
 					}
-					if (BLOCKING == 0) 
+					if (blocking == 0) 
 						MPI_Waitall (myWeight+1, wrequest, wstatus);
 					}
 				}
+				//non-coalesced
 				else {
 					for (i=0; i<arrayLength ; i++) 
 						MPI_Irecv (shuffledNodesData[i], count, MPI_DOUBLE, shuffledNodes[i], myrank, MPI_COMM_WORLD, &req[i]); 
@@ -235,11 +250,11 @@ printf("%d will send\n", myrank);		//bridgeRanks[newBridgeNode[myrank]]);
 					for (i=0; i<arrayLength ; i++) {
 						int idx;
 						MPI_Waitany (myWeight, req, &idx, &stat);
-#ifdef DEBUG
+//#ifdef DEBUG
 						printf ("BN %d received data from %d\n", myrank, shuffledNodes[idx]);
-#endif
+//#endif
 					
-						if (BLOCKING == 1) { 
+						if (blocking == 1) { 
 							result = MPI_File_write_at (fileHandle, (MPI_Offset)shuffledNodes[idx]*count*sizeof(double), shuffledNodesData[idx], count, MPI_DOUBLE, &status);
 							if (result != MPI_SUCCESS) 
 								prnerror (result, "BN for nonblocking MPI_File_write_at Error:");
@@ -249,12 +264,12 @@ printf("%d will send\n", myrank);		//bridgeRanks[newBridgeNode[myrank]]);
 							//if (result != MPI_SUCCESS) 
 							//	prnerror (result, "BN for nonblocking MPI_File_iwrite_at Error:");
 						}
-						if (BLOCKING == 1) {
+						if (blocking == 1) {
 							MPI_Get_elements( &status, MPI_CHAR, &nbytes );
 							totalBytes += nbytes;
 						}
 					}
-					if (BLOCKING == 0) 
+					if (blocking == 0) 
 						MPI_Waitall (myWeight+1, wrequest, wstatus);
 				}
 			
@@ -264,11 +279,11 @@ printf("%d will send\n", myrank);		//bridgeRanks[newBridgeNode[myrank]]);
 			}
 		}
 		// all = 1, default independent write
-		else if (all = 1) {
+		else if (all == 1) {
 				MPI_Request wrequest;
 				start = MPI_Wtime();
 
-				if (BLOCKING == 1) {
+				if (blocking == 1) {
 					result = MPI_File_write_at (fileHandle, (MPI_Offset)myrank*count*sizeof(double), datum->getAlphaBuffer(), count, MPI_DOUBLE, &status);
 					if (result != MPI_SUCCESS) 
 						prnerror (result, "all MPI_File_write_at Error:");
@@ -287,28 +302,36 @@ printf("%d will send\n", myrank);		//bridgeRanks[newBridgeNode[myrank]]);
 				totalBytes += nbytes;
 				
 		}
-		else if (all = 2) {
+
+		else if (all == 2) {
 			
 				start = MPI_Wtime();
-				if (BLOCKING == 1) {
+				if (blocking == 1) {
+//					puts("1 Collective I/O\n");
 					result = MPI_File_write_at_all (fileHandle, (MPI_Offset)myrank*count*sizeof(double), datum->getAlphaBuffer(), count, MPI_DOUBLE, &status);
 					if (result != MPI_SUCCESS) 
 						prnerror (result, "collective MPI_File_write_at_all Error:");
 				}
 				else {
 #ifdef MPI3
+//					puts("2 Collective I/O\n");
 					result = MPIX_File_iwrite_at_all (fileHandle, (MPI_Offset)myrank*count*sizeof(double), datum->getAlphaBuffer(), count, MPI_DOUBLE, &request);
 					result = MPI_Wait(&request, &status);
-#else
-					MPI_File_set_view (fileHandle, (MPI_Offset)myrank*count*sizeof(double), MPI_DOUBLE, MPI_DOUBLE, "native", MPI_INFO_NULL);
-					result = MPI_File_write_all (fileHandle, datum->getAlphaBuffer(), count, MPI_DOUBLE, &status);
-#endif
 					if (result != MPI_SUCCESS) 
 						prnerror (result, "collective MPIX_File_iwrite_at_all Error:");
+#else
+//					puts("3 Collective I/O\n");
+					MPI_File_set_view (fileHandle, (MPI_Offset)myrank*count*sizeof(double), MPI_DOUBLE, MPI_DOUBLE, "native", MPI_INFO_NULL);
+					result = MPI_File_write_all (fileHandle, datum->getAlphaBuffer(), count, MPI_DOUBLE, &status);
+					if (result != MPI_SUCCESS) 
+						prnerror (result, "collective MPI_File_write_all Error:");
+#endif
 				}
 				end = MPI_Wtime()-start;
 				MPI_Get_elements( &status, MPI_CHAR, &nbytes );
 				totalBytes += nbytes;
+
+//				puts("Collective I/O\n");
 		}
 		return totalBytes;
 }
@@ -1046,26 +1069,18 @@ void initTree(int n) {
 
 int main (int argc, char **argv) {
 
+//		if (argc<5) return 0;
+
 		MPI_Init (&argc, &argv);
 
 		MPI_Comm_rank (MPI_COMM_WORLD, &myrank);
 		MPI_Comm_size (MPI_COMM_WORLD, &commsize);
 
-		if (argc > 1){
-			int exp = atoi (argv[1]);
-			fileSize = exp * oneKB;	
-		}
-
-//TODO
-//	BLOCKING = atoi (argv[2]);
-		BLOCKING = 0;			//non-blocking
-
-		if (atoi(argv[2]) == 0)
-			coalesced = false;
-		else
-			coalesced = true;
-
-		int type = atoi(argv[3]);
+		int exp = atoi (argv[1]);
+		fileSize = exp * oneKB;	
+		coalesced = atoi(argv[2]);
+		blocking = atoi(argv[3]);
+		type = atoi(argv[4]);
 
 		int i, c;
 /*
@@ -1140,7 +1155,7 @@ int main (int argc, char **argv) {
 		MPI_Bcast(newBridgeNode, MidplaneSize*ppn, MPI_INT, rootps, MPI_COMM_WORLD);	
 		MPI_Bcast(bridgeRanks, numBridgeNodes, MPI_INT, rootps, MPI_COMM_WORLD);	
 
-		if (bridgeNodeInfo[1] == 1 && coalesced == false) distributeInfo();
+		if (bridgeNodeInfo[1] == 1 && coalesced == 0) distributeInfo();
 
 		double tOEnd = MPI_Wtime();
 
@@ -1154,7 +1169,7 @@ int main (int argc, char **argv) {
 		int count = fileSize;				//weak scaling
 		dataBlock *datum = new dataBlock(count);			//initializes alpha array to random double values
 
-		bgpm_init();
+		bgpminit();
 
 		//Testing BGQ compute nodes to IO nodes performance
 		//Write to /dev/null
@@ -1171,6 +1186,7 @@ int main (int argc, char **argv) {
 
 		/* allocate buffer */
 		datum->allocElement (1);
+
 
 		if (type == 1) {
 
@@ -1213,10 +1229,10 @@ int main (int argc, char **argv) {
 		MPI_File_open (MPI_COMM_WORLD, fileNameFS, mode, MPI_INFO_NULL, &fileHandle);
 		for (int i=1; i<=SKIP; i++)
 			totalBytes[1][1] += writeFile(datum, count, 1);
-		double t2 = MPI_Wtime();
+		tstart = MPI_Wtime();
 		for (int i=1; i<=MAXTIMESD; i++)
 			totalBytes[1][1] += writeFile(datum, count, 1);
-		te[1] = (MPI_Wtime() - t2)/MAXTIMESD;
+		tend = (MPI_Wtime() - tstart)/MAXTIMESD;
 		MPI_File_close (&fileHandle);
 
 		}
@@ -1226,10 +1242,10 @@ int main (int argc, char **argv) {
 		MPI_File_open (MPI_COMM_WORLD, fileNameFSCO, mode, MPI_INFO_NULL, &fileHandle);
 		for (int i=1; i<=SKIP; i++)
 			totalBytes[1][2] += writeFile(datum, count, 2);
-		double t3 = MPI_Wtime();
+		tstart = MPI_Wtime();
 		for (int i=1; i<=MAXTIMESD; i++)
 			totalBytes[1][2] += writeFile(datum, count, 2);
-		te[2] = (MPI_Wtime() - t3)/MAXTIMESD;
+		tend = (MPI_Wtime() - tstart)/MAXTIMESD;
 		MPI_File_close (&fileHandle);
 
 		}
@@ -1239,10 +1255,10 @@ int main (int argc, char **argv) {
 		MPI_File_open (MPI_COMM_WORLD, fileNameFSBN, mode, MPI_INFO_NULL, &fileHandle);
 		for (int i=1; i<=SKIP; i++)
 			totalBytes[1][0] += writeFile(datum, count, 0);
-		double t1 = MPI_Wtime();
+		tstart = MPI_Wtime();
 		for (int i=1; i<=MAXTIMESD; i++)
 			totalBytes[1][0] += writeFile(datum, count, 0);
-		te[0] = (MPI_Wtime() - t1)/MAXTIMESD;
+		tend = (MPI_Wtime() - tstart)/MAXTIMESD;
 		MPI_File_close (&fileHandle);
 
 		}
@@ -1252,23 +1268,18 @@ int main (int argc, char **argv) {
 
 		//* * * * * * * * * * * * * * * * * * * * * * * * * * * End of IO * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
-		bgpm_finalize();
+		bgpmfinalize();
 
-		double tEnd = MPI_Wtime();
-		
 		double max[5];
 
 		MPI_Reduce(&tION[0], &max[0], 1, MPI_DOUBLE, MPI_MAX, rootps, MPI_COMM_WORLD);
 		MPI_Reduce(&tION[1], &max[1], 1, MPI_DOUBLE, MPI_MAX, rootps, MPI_COMM_WORLD);
-		MPI_Reduce(&te[0], &max[2], 1, MPI_DOUBLE, MPI_MAX, rootps, MPI_COMM_WORLD);
-		MPI_Reduce(&te[1], &max[3], 1, MPI_DOUBLE, MPI_MAX, rootps, MPI_COMM_WORLD);
-		MPI_Reduce(&te[2], &max[4], 1, MPI_DOUBLE, MPI_MAX, rootps, MPI_COMM_WORLD);
+		MPI_Reduce(&tend, &max[2], 1, MPI_DOUBLE, MPI_MAX, rootps, MPI_COMM_WORLD);
 
 		MPI_Finalize ();
 
 		if (myrank == rootps) {
-			printf ("Times: %d: %d %d %d # %d | %lf %lf | %lf %lf %lf\n", commsize, type, ppn, omp_get_num_threads(), 8*fileSize, max[0], max[1], max[2], max[3], max[4]);
-			//printf ("Times: %d %4.2f %4.2f %4.2f %d %6.3f\n", myrank, totalBytes[0][0]*1.0/oneMB, tION_elapsed_0, tION_elapsed_1, bridgeNodeInfo[0], tEnd-tStart);   // rank, MB, MB, sec..
+			printf ("Times: %d: %d: %d: %d | %d %d | %6.2f | %lf %lf | %lf\n", type, blocking, coalesced, commsize, ppn, omp_get_num_threads(), 8.0*fileSize/1024.0, max[0], max[1], max[2]);
 		}
 
     PrintCounts("NW", hNWSet, myrank);
