@@ -1,14 +1,17 @@
 #ifndef __personality__
 #define __personality__
 
-//#define MidplaneSize 512//*4
-
 //Variables
 /* 
  * Size of midplane on BGQ
  */
 //extern const int MidplaneSize; 
 #define MidplaneSize 512
+
+/*
+ * Number of midplanes : Number of processes / MidplaneSize
+ */
+extern int numMidplanes;
 
 /* 
  * Structure containing BGQ parameters 

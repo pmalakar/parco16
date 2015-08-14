@@ -110,7 +110,7 @@ int writeFile(dataBlock *datum, int count, int all) {
 		  	if(newBridgeNode[nodeID*ppn] != -1) {	
 					int	myBridgeRank = bridgeRanks[newBridgeNode[nodeID*ppn]] + coreID; 
 #ifdef DEBUG
-printf("%d will send to %d\n", myrank, myBridgeRank);		//bridgeRanks[newBridgeNode[myrank]]);
+printf("%d will send to %d\n", myrank, myBridgeRank);		
 #endif
 
 					if (coalesced == 1) {
@@ -120,9 +120,8 @@ printf("%d will send to %d\n", myrank, myBridgeRank);		//bridgeRanks[newBridgeNo
 							if (dataPerNode == NULL) printf("allocation error at %d\n", myrank);
 						}
 #ifdef DEBUG
-printf("%d will gather\n", myrank);		//bridgeRanks[newBridgeNode[myrank]]);
+printf("%d will gather\n", myrank);		
 #endif
-
 						result = MPI_Gather (datum->getAlphaBuffer(), count, MPI_DOUBLE, dataPerNode, count, MPI_DOUBLE, 0, MPI_COMM_NODE);
 						if (result != MPI_SUCCESS) 
 								prnerror (result, "coalesced nonBN node MPI_Gather Error:");
@@ -133,7 +132,7 @@ printf("%d will gather\n", myrank);		//bridgeRanks[newBridgeNode[myrank]]);
 printf("%d will send to BN %d\n", myrank, myBridgeRank);		
 fflush(stdout);
 #endif
-							result = MPI_Isend (dataPerNode, count*ppn, MPI_DOUBLE, myBridgeRank, myBridgeRank, MPI_COMM_WORLD, &sendreq);	
+							result = MPI_Isend (dataPerNode, count*ppn, MPI_DOUBLE, myBridgeRank, myBridgeRank, MPI_COMM_MIDPLANE, &sendreq);	
 							if (result != MPI_SUCCESS) 
 								prnerror (result, "coalesced nonBN node MPI_Isend Error:");
 							MPI_Wait (&sendreq, &sendst);
@@ -142,7 +141,7 @@ fflush(stdout);
 					}
 					//no coalescing
 					else {
-						MPI_Isend (datum->getAlphaBuffer(), count, MPI_DOUBLE, myBridgeRank, myBridgeRank, MPI_COMM_WORLD, &sendreq);	
+						MPI_Isend (datum->getAlphaBuffer(), count, MPI_DOUBLE, myBridgeRank, myBridgeRank, MPI_COMM_MIDPLANE, &sendreq);	
 						MPI_Wait (&sendreq, &sendst);
 					}
 #ifdef DEBUG
@@ -216,11 +215,7 @@ fflush(stdout);
 						printf("BN %d will write %d doubles req %d\n", myrank, count, myWeight);
 #endif
 					result = MPI_File_iwrite_at (fileHandle, (MPI_Offset)myrank*count*sizeof(double), datum->getAlphaBuffer(), count, MPI_DOUBLE, &wrequest[myWeight]);
-					//if (result != MPI_SUCCESS) 
-					//	prnerror (result, "BN own MPI_File_iwrite_at Error:");
 				}
-		//		MPI_Get_elements( &status, MPI_CHAR, &nbytes );
-		//		totalBytes += nbytes;
 
 				int idx;
 				// Post the nonblocking receives for my senders
@@ -234,8 +229,7 @@ fflush(stdout);
 					printf("\n%d: myWeight = %d arrayLength = %d\n\n", myrank, myWeight, arrayLength);
 #endif
 			//		assert(shuffledNodes[i]);
-					MPI_Irecv (shuffledNodesData[i], count*ppn, MPI_DOUBLE, shuffledNodes[i], myrank, MPI_COMM_WORLD, &req[i]);				
-
+					MPI_Irecv (shuffledNodesData[i], count*ppn, MPI_DOUBLE, shuffledNodes[i], myrank, MPI_COMM_MIDPLANE, &req[i]);				
 				 }
 
 //#pragma omp parallel for
@@ -251,8 +245,6 @@ fflush(stdout);
 						}
 						else {
 							result = MPI_File_iwrite_at (fileHandle, (MPI_Offset)shuffledNodes[idx]*count*sizeof(double), shuffledNodesData[idx], count*ppn, MPI_DOUBLE, &wrequest[idx]);
-						//	if (result != MPI_SUCCESS) 
-						//		prnerror (result, "BN for nonBN MPI_File_iwrite_at Error:");
 						}
 					}
 					if (blocking == 0) 
@@ -262,7 +254,7 @@ fflush(stdout);
 				//non-coalesced
 				else {
 					for (int i=0; i<arrayLength ; i++) 
-						MPI_Irecv (shuffledNodesData[i], count, MPI_DOUBLE, shuffledNodes[i], myrank, MPI_COMM_WORLD, &req[i]); 
+						MPI_Irecv (shuffledNodesData[i], count, MPI_DOUBLE, shuffledNodes[i], myrank, MPI_COMM_MIDPLANE, &req[i]); 
 //#pragma omp parallel for
 					for (int i=0; i<arrayLength ; i++) {
 						MPI_Waitany (myWeight, req, &idx, &stat);
@@ -277,8 +269,6 @@ fflush(stdout);
 						}
 						else {
 							result = MPI_File_iwrite_at (fileHandle, (MPI_Offset)shuffledNodes[idx]*count*sizeof(double), shuffledNodesData[idx], count, MPI_DOUBLE, &wrequest[idx]);
-							//if (result != MPI_SUCCESS) 
-							//	prnerror (result, "BN for nonblocking MPI_File_iwrite_at Error:");
 						}
 						if (blocking == 1) {
 							MPI_Get_elements( &status, MPI_CHAR, &nbytes );
@@ -295,6 +285,7 @@ fflush(stdout);
 				free(shuffledNodesData);
 			}
 		}
+
 		// all = 1, default independent write
 		else if (all == 1) {
 				MPI_Request wrequest;
@@ -309,35 +300,30 @@ fflush(stdout);
 					MPIO_Request req_iw;
 					MPI_Status st_iw;
 					result = MPI_File_iwrite_at (fileHandle, (MPI_Offset)myrank*count*sizeof(double), datum->getAlphaBuffer(), count, MPI_DOUBLE, &req_iw);
-					//if (result != MPI_SUCCESS) 
-					//	prnerror (result, "all MPI_File_iwrite_at Error:");
 					MPI_Wait(&req_iw, &st_iw);
 				}
 
 				end = MPI_Wtime()-start;
 				MPI_Get_elements( &status, MPI_CHAR, &nbytes );
 				totalBytes += nbytes;
-				
 		}
 
+		// all = 2, default collective write
 		else if (all == 2) {
 			
 				start = MPI_Wtime();
 				if (blocking == 1) {
-//					puts("1 Collective I/O\n");
 					result = MPI_File_write_at_all (fileHandle, (MPI_Offset)myrank*count*sizeof(double), datum->getAlphaBuffer(), count, MPI_DOUBLE, &status);
 					if (result != MPI_SUCCESS) 
 						prnerror (result, "collective MPI_File_write_at_all Error:");
 				}
 				else {
 #ifdef MPI3
-//					puts("2 Collective I/O\n");
 					result = MPIX_File_iwrite_at_all (fileHandle, (MPI_Offset)myrank*count*sizeof(double), datum->getAlphaBuffer(), count, MPI_DOUBLE, &request);
 					result = MPI_Wait(&request, &status);
 					if (result != MPI_SUCCESS) 
 						prnerror (result, "collective MPIX_File_iwrite_at_all Error:");
 #else
-//					puts("3 Collective I/O\n");
 					MPI_File_set_view (fileHandle, (MPI_Offset)myrank*count*sizeof(double), MPI_DOUBLE, MPI_DOUBLE, "native", MPI_INFO_NULL);
 					result = MPI_File_write_all (fileHandle, datum->getAlphaBuffer(), count, MPI_DOUBLE, &status);
 					if (result != MPI_SUCCESS) 
@@ -347,8 +333,6 @@ fflush(stdout);
 				end = MPI_Wtime()-start;
 				MPI_Get_elements( &status, MPI_CHAR, &nbytes );
 				totalBytes += nbytes;
-
-//				puts("Collective I/O\n");
 		}
 		return totalBytes;
 }
@@ -357,26 +341,22 @@ fflush(stdout);
 int build5DTorus (int root) {
 
 	double tStart = MPI_Wtime();
-	//for (int rank = root ; rank < root+MidplaneSize ; rank++) {
 	for (int rank = root ; rank < root+MidplaneSize*ppn ; rank=rank+ppn) {
 #ifdef DEBUG
 		printf ("%d: findNeighbours of %d\n", myrank, rank);
 #endif
 		int result = findNeighbours (myrank, rank);
-		//if (result != 0) return result;
 	}
 	double tEnd = MPI_Wtime() - tStart;
+
 #ifdef DEBUG
 	printf("%d: findNeighbours time taken: %lf\n", myrank, tEnd);	
-#endif
 
-/*
-#ifdef DEBUG
 	for (int i=0; i<MidplaneSize ; i++)
 		for (int j=0; j<10 ; j++)
 			printf ("%d: Nghbr %d of %d -- %d;\n", myrank, j, i, neighbourRanks[i][j]);
 #endif
-*/
+
 	return 0;
 
 }
@@ -746,12 +726,7 @@ void formBridgeNodesRoutes () {
 
 	int i, j, bn, result;
 	double tStart, tEnd;
-//	rootps = floor(myrank/(MidplaneSize*ppn));
 
-//	int numBridgeNodes = 8; 		// TODO Number of bridge nodes?
-//	int bridgeRanks[numBridgeNodes];
-
-	//for (j=0; j<MidplaneSize ; j++)
 	for (j=0; j<MidplaneSize*ppn ; j++)
 			newBridgeNode[j] = -1;
 
@@ -765,7 +740,7 @@ void formBridgeNodesRoutes () {
 #endif
 		tStart = MPI_Wtime();
 		for (int iter = 0; iter < numBridgeNodes ; iter ++) {
-			result = MPI_Irecv (&bridgeRanks[iter], 1, MPI_INT, MPI_ANY_SOURCE, 100, MPI_COMM_WORLD, &request[iter]);
+			result = MPI_Irecv (&bridgeRanks[iter], 1, MPI_INT, MPI_ANY_SOURCE, 100, MPI_COMM_MIDPLANE, &request[iter]);
 			if (result != MPI_SUCCESS) 
 				prnerror (result, "MPI_Irecv Error: ");
 		}
@@ -780,14 +755,13 @@ void formBridgeNodesRoutes () {
 			printf("%d sends to BN[%d] %d\n", myrank, i, bridgeRanks[i]);
 #endif
 			//Introduce all bridge nodes to each other
-			result = MPI_Isend (bridgeRanks, numBridgeNodes, MPI_INT, bridgeRanks[i], 101, MPI_COMM_WORLD, &request[i]);
+			result = MPI_Isend (bridgeRanks, numBridgeNodes, MPI_INT, bridgeRanks[i], 101, MPI_COMM_MIDPLANE, &request[i]);
 			if (result != MPI_SUCCESS) 
 				prnerror (result, "MPI_Isend Error: ");
 
 			//Send all nodes' bridgeNodeInfo to all bridge nodes//TODO hardcoded 512
 			//Processes on same node by default have the same bridge node
-			//result = MPI_Isend (bridgeNodeAll, 2*MidplaneSize, MPI_INT, bridgeRanks[i], 102, MPI_COMM_WORLD, &requestAll[i]);
-			result = MPI_Isend (bridgeNodeAll, 2*MidplaneSize*ppn, MPI_INT, bridgeRanks[i], 102, MPI_COMM_WORLD, &requestAll[i]);
+			result = MPI_Isend (bridgeNodeAll, 2*MidplaneSize*ppn, MPI_INT, bridgeRanks[i], 102, MPI_COMM_MIDPLANE, &requestAll[i]);
 			if (result != MPI_SUCCESS) 
 				prnerror (result, "MPI_Isend Error: ");
 		}
@@ -806,8 +780,7 @@ void formBridgeNodesRoutes () {
 #endif
 
 		MPI_Status st;	
-		//MPI_Recv(newBridgeNode, MidplaneSize, MPI_INT, bridgeRanks[0], bridgeRanks[0], MPI_COMM_WORLD, &st);	
-		MPI_Recv(newBridgeNode, MidplaneSize*ppn, MPI_INT, bridgeRanks[0], bridgeRanks[0], MPI_COMM_WORLD, &st);	
+		MPI_Recv(newBridgeNode, MidplaneSize*ppn, MPI_INT, bridgeRanks[0], bridgeRanks[0], MPI_COMM_MIDPLANE, &st);	
 	}
 	
 	//process on Bridge node core 0
@@ -818,16 +791,16 @@ void formBridgeNodesRoutes () {
 
 		tStart = MPI_Wtime();
 
-		result = MPI_Isend (&myrank, 1, MPI_INT, rootps, 100, MPI_COMM_WORLD, &requestSend);
+		result = MPI_Isend (&myrank, 1, MPI_INT, rootps, 100, MPI_COMM_MIDPLANE, &requestSend);
 		if (result != MPI_SUCCESS) 
 			prnerror (result, "MPI_Isend Error: ");
 
-		result = MPI_Irecv (bridgeRanks, numBridgeNodes, MPI_INT, rootps, 101, MPI_COMM_WORLD, &requestRecv);
+		result = MPI_Irecv (bridgeRanks, numBridgeNodes, MPI_INT, rootps, 101, MPI_COMM_MIDPLANE, &requestRecv);
 		if (result != MPI_SUCCESS) 
 			prnerror (result, "MPI_Irecv Error: ");
 
-		//result = MPI_Irecv (bridgeNodeAll, 2*MidplaneSize, MPI_INT, rootps, 102, MPI_COMM_WORLD, &requestRecvAll);
-		result = MPI_Irecv (bridgeNodeAll, 2*MidplaneSize*ppn, MPI_INT, rootps, 102, MPI_COMM_WORLD, &requestRecvAll);
+		//result = MPI_Irecv (bridgeNodeAll, 2*MidplaneSize, MPI_INT, rootps, 102, MPI_COMM_MIDPLANE, &requestRecvAll);
+		result = MPI_Irecv (bridgeNodeAll, 2*MidplaneSize*ppn, MPI_INT, rootps, 102, MPI_COMM_MIDPLANE, &requestRecvAll);
 		if (result != MPI_SUCCESS) 
 			prnerror (result, "MPI_Irecv Error: ");
 
@@ -940,8 +913,8 @@ void formBridgeNodesRoutes () {
 			if (bridgeRanks[bn] == myrank) myWeight = int(avgWeight[bn]);
 
 	  if (myrank == bridgeRanks[0])
-			MPI_Send(newBridgeNode, MidplaneSize*ppn, MPI_INT, rootps, bridgeRanks[0], MPI_COMM_WORLD);	//TODO subcomm for the midplane
-			//MPI_Send(newBridgeNode, MidplaneSize, MPI_INT, rootps, bridgeRanks[0], MPI_COMM_WORLD);	//TODO subcomm for the midplane
+			MPI_Send(newBridgeNode, MidplaneSize*ppn, MPI_INT, rootps, bridgeRanks[0], MPI_COMM_MIDPLANE);	//TODO subcomm for the midplane
+			//MPI_Send(newBridgeNode, MidplaneSize, MPI_INT, rootps, bridgeRanks[0], MPI_COMM_MIDPLANE);	//TODO subcomm for the midplane
 	
 
 /*
@@ -1015,8 +988,8 @@ void formBridgeNodesRoutes () {
 		if (k+1 != myWeight) printf("%d: Error in number of shuffledNodes: %d %d\n", myrank, k, myWeight);
 
 	
-	MPI_Bcast(&newBridgeNode, MidplaneSize, MPI_INT, bridgeRanks[0], MPI_COMM_WORLD);	//TODO subcomm for the midplane
-	MPI_Bcast(&revisit, MidplaneSize*2, MPI_BYTE, bridgeRanks[0], MPI_COMM_WORLD);	//TODO subcomm for the midplane
+	MPI_Bcast(&newBridgeNode, MidplaneSize, MPI_INT, bridgeRanks[0], MPI_COMM_MIDPLANE);	//TODO subcomm for the midplane
+	MPI_Bcast(&revisit, MidplaneSize*2, MPI_BYTE, bridgeRanks[0], MPI_COMM_MIDPLANE);	//TODO subcomm for the midplane
 
 */
 
@@ -1149,7 +1122,7 @@ int main (int argc, char **argv) {
 
 		rootps = floor(myrank/(MidplaneSize*ppn)) * MidplaneSize;
 
-		printf("\n%d %d\n", myrank, rootps);
+		//printf("\n%d %d\n", myrank, rootps);
 
 		double tStart = MPI_Wtime();	//entire execution
 
@@ -1171,8 +1144,9 @@ int main (int argc, char **argv) {
 		MPI_Comm_split (COMM_BRIDGE_NODES, coreID, myrank, &COMM_BRIDGE_NODES_core);
 
 		//gather bridgeNodeInfo at the rootps
+		//bridgeNodeAll - per root
 		double ts = MPI_Wtime();
-		MPI_Gather (bridgeNodeInfo, 2, MPI_INT, bridgeNodeAll, 2, MPI_INT, rootps, MPI_COMM_WORLD);
+		MPI_Gather (bridgeNodeInfo, 2, MPI_INT, bridgeNodeAll, 2, MPI_INT, rootps, MPI_COMM_MIDPLANE);
 		ts = MPI_Wtime() - ts;
 
 #ifdef DEBUG
@@ -1184,9 +1158,8 @@ int main (int argc, char **argv) {
 		double tOStart = MPI_Wtime();
 		if (coreID == 0) formBridgeNodesRoutes ();
 
-		//MPI_Bcast(newBridgeNode, MidplaneSize, MPI_INT, rootps, MPI_COMM_WORLD);	
 		MPI_Bcast(newBridgeNode, MidplaneSize*ppn, MPI_INT, rootps, MPI_COMM_MIDPLANE);	
-		MPI_Bcast(bridgeRanks, numBridgeNodes, MPI_INT, rootps, MPI_COMM_WORLD);	
+		MPI_Bcast(bridgeRanks, numBridgeNodes, MPI_INT, rootps, MPI_COMM_MIDPLANE);	
 
 		//if (bridgeNodeInfo[1] == 1 && coalesced == 0) distributeInfo();
 		if (bridgeNodeInfo[1] == 1) distributeInfo();
@@ -1306,13 +1279,13 @@ int main (int argc, char **argv) {
 
 		double max[5];
 
-		MPI_Reduce(&tION[0], &max[0], 1, MPI_DOUBLE, MPI_MAX, rootps, MPI_COMM_WORLD);
-		MPI_Reduce(&tION[1], &max[1], 1, MPI_DOUBLE, MPI_MAX, rootps, MPI_COMM_WORLD);
-		MPI_Reduce(&tend, &max[2], 1, MPI_DOUBLE, MPI_MAX, rootps, MPI_COMM_WORLD);
+		MPI_Reduce(&tION[0], &max[0], 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+		MPI_Reduce(&tION[1], &max[1], 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+		MPI_Reduce(&tend, &max[2], 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
 		MPI_Finalize ();
 
-		if (myrank == rootps) {
+		if (myrank == 0) {
 			printf ("Times: %d: %d: %d: %d | %d %d | %6.2f | %lf %lf | %lf\n", type, blocking, coalesced, commsize, ppn, omp_get_num_threads(), 8.0*fileSize/1024.0, max[0], max[1], max[2]);
 		}
 
