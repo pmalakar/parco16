@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <assert.h>
 #include <mpi.h>
 #include <mpix.h>
 
@@ -8,20 +9,23 @@
 //Variables
 int **neighbourRanks;	//[MidplaneSize][10];
 int NUM_NEIGHBOURS=10;
-//int **neighbourRanks;
 
+//called before calling findNeighbours for the first time
 void initNeighbours() {
 	neighbourRanks = new int * [MidplaneSize*ppn];
 	for (int i=0 ; i<MidplaneSize*ppn ; i++)
 		neighbourRanks[i] = new int[NUM_NEIGHBOURS];
 }
 
-//neighbour 2D array
-//neighbour [0]  a+ b c d e t
-//neighbour [1]  a- b c d e t
-// ...
-//
-//change each bit - get ten ngbhrs 
+/*
+	* change each coordinate of the current rank to get ten neighbours
+	 
+	//neighbour (2D array) of (a, b, c, d, e)
+	//neighbour [0]  a+ b c d e t
+	//neighbour [1]  a- b c d e t
+	//neighbour [2]  a b+ c d e t
+	// ...
+*/
 int findNeighbours (int myrank, int currentRank) {
 
 	// * * * * * Variable declaration * * * * * //
@@ -30,11 +34,8 @@ int findNeighbours (int myrank, int currentRank) {
 	int currentCoords[MPIX_TORUS_MAX_DIMS+1];
 	int neighbour[10][6];	//max 10 neighbours (10 links)
 
-/*
-	neighbourRanks = new int *[MidplaneSize];
-	for (i=0 ; i<MidplaneSize ; i++)
-		neighbourRanks[i] = new int[10];
-*/
+	assert(neighbourRanks);
+
 	//Get coordinates of current node	
 	MPIX_Rank2torus (currentRank, currentCoords);
 
@@ -91,7 +92,6 @@ int findNeighbours (int myrank, int currentRank) {
 		else
 			neighbourRanks[currentRank][++count] = -1;
 
-
 		// minus direction
 		// if dim size is 2, there is only 1 direction
 		if (dimSize[dim] == 2)
@@ -140,12 +140,11 @@ int findNeighbours (int myrank, int currentRank) {
 		  }
 
 		  if (k>count) {	//no matching rank found, add the rank 
-			neighbourRanks[currentRank][++count] = rank;
+				neighbourRanks[currentRank][++count] = rank;
 #ifdef DEBUG
-			printf("%d: Set neighbour[%d] for %d as %d i.e. %d (%d %d %d %d %d)\n", myrank, count, currentRank, neighbourRanks[currentRank][count], rank, neighbour[index+1][0], neighbour[index+1][1], neighbour[index+1][2], neighbour[index+1][3], neighbour[index+1][4]);
+				printf("%d: Set neighbour[%d] for %d as %d i.e. %d (%d %d %d %d %d)\n", myrank, count, currentRank, neighbourRanks[currentRank][count], rank, neighbour[index+1][0], neighbour[index+1][1], neighbour[index+1][2], neighbour[index+1][3], neighbour[index+1][4]);
 #endif
 			}
-		
 		}
 		else
 			neighbourRanks[currentRank][++count] = -1;
@@ -154,18 +153,16 @@ int findNeighbours (int myrank, int currentRank) {
 #ifdef DEBUG
 	for (num = 0; num<10; num ++) {
 	  if (neighbourRanks[currentRank][num] != -1) {
-		printf ("%d: Neighbour %d of %d (%d %d %d %d %d) at %d => %d %d %d %d %d => %d\n", myrank, num, currentRank, currentCoords[0], currentCoords[1], currentCoords[2], currentCoords[3], currentCoords[4], bridgeNodeInfo[0], neighbour[num][0], neighbour[num][1], neighbour[num][2], neighbour[num][3], neighbour[num][4], neighbourRanks[currentRank][num]);
+			printf ("%d: Neighbour %d of %d (%d %d %d %d %d) at %d => %d %d %d %d %d => %d\n", myrank, num, currentRank, currentCoords[0], currentCoords[1], currentCoords[2], currentCoords[3], currentCoords[4], bridgeNodeInfo[0], neighbour[num][0], neighbour[num][1], neighbour[num][2], neighbour[num][3], neighbour[num][4], neighbourRanks[currentRank][num]);
 	  }	
 	}
+	
+	for (num = 0; num<10; num ++) 
+	  if (neighbourRanks[currentRank][num] != -1)  
+			printf (" %d -- %d;\n", currentRank, neighbourRanks[currentRank][num]);
 #endif
 	
-	/*for (num = 0; num<10; num ++) 
-	  if (neighbourRanks[currentRank][num] != -1)  
-		printf (" %d -- %d;\n", currentRank, neighbourRanks[currentRank][num]);
-	*/
-
 	return 0;
 }
-
 
 

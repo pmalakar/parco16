@@ -10,6 +10,7 @@
 #include <iostream>
 #include <iomanip>
 #include <stdlib.h>
+#include <assert.h>
 #include <math.h>
 #include <string.h>
 #include <mpi.h>
@@ -35,27 +36,26 @@
 
 extern "C" void getMemStats(int, int);
 
-int rootps = 0;								// Default root process
+int rootps;
+int numBridgeNodes;
+int numBridgeNodesAll;
 
-int *bridgeNodeAll; 					//[MidplaneSize*2];				//2 integers per rank
-bool *visited, *processed;		//[MidplaneSize], processed[MidplaneSize];
-int *newBridgeNode;						//[MidplaneSize];
+int *bridgeNodeAll; 					//[MidplaneSize*2]				//2 integers per rank
+bool *visited, *processed;		//[MidplaneSize][MidplaneSize];
+int *newBridgeNode;						//[MidplaneSize]
 uint8_t **revisit;
 uint8_t **depthInfo; 					//[numBridgeNodes][MidplaneSize];
 
-int *bridgeRanks; 						//	[numBridgeNodes];
+int *bridgeRanks; 						//[numBridgeNodes];
 uint8_t bridgeNodeCurrIdx;
 
-MPI_Comm COMM_BRIDGE_NODES, MPI_COMM_core, MPI_COMM_NODE;
-MPI_Comm COMM_BRIDGE_NODES_core;
+MPI_Comm MPI_COMM_core, MPI_COMM_NODE;
+MPI_Comm MPI_COMM_MIDPLANE;
+MPI_Comm COMM_BRIDGE_NODES, COMM_BRIDGE_NODES_core;
 
-#ifdef CETUS
-const int numBridgeNodes = 8;		//cetus/mira 
-#else
-const int numBridgeNodes = 32; 	//vesta
-#endif
-
+//Average load per BN
 float *avgWeight;			//[numBridgeNodes];
+
 int *shuffledNodes;
 double **shuffledNodesData;
 
@@ -514,7 +514,7 @@ void traverse (int index, int level) {
 			child = node->getChildId(i);
 			depth = (node->getChild(i))->getDepth();
 #ifdef DEBUG
-//TODO seg fault
+//TODO check seg fault
 //			if (myrank == rid) { 
 //				printf ("%d: Tally: %d = %d ?\n", myrank, depth, depthInfo[nid][child]);
 //				printf("%d level %d : %d [%d] curr %d [%d] orig %d [%d]\n", rid, level, child, i, depth, nid, bridgeNodeAll[child*2+1], bridgeNodeAll[child*2]);
@@ -1098,6 +1098,21 @@ int main (int argc, char **argv) {
 		blocking = atoi(argv[3]);
 		type = atoi(argv[4]);
 
+		getPersonality(myrank);
+
+		numMidplanes = commsize / (MidplaneSize*ppn);
+		
+#ifdef CETUS
+		numBridgeNodes = 8;		//cetus/mira 
+#else
+		numBridgeNodes = 32; 	//vesta
+#endif
+		numBridgeNodesAll = numBridgeNodes * numMidplanes;		//cetus/mira 
+
+#ifdef DEBUG
+		printf("\n%d %d %d\n", numMidplanes, MidplaneSize, numBridgeNodesAll);
+#endif
+
 		int i, c;
 /*
 		opterr = 0;
@@ -1113,9 +1128,6 @@ int main (int argc, char **argv) {
 		}
 */
 		double tAStart, tAEnd; 
-
-//TODO if I am on core 0
-		getPersonality(myrank);
 
 		bridgeNodeAll = new int [2*MidplaneSize*ppn];
 		visited = new bool [MidplaneSize*ppn];
@@ -1135,7 +1147,9 @@ int main (int argc, char **argv) {
 
 		rootNodeList = new queue<Node *> [numBridgeNodes];
 
-		rootps = floor(myrank/(MidplaneSize*ppn));
+		rootps = floor(myrank/(MidplaneSize*ppn)) * MidplaneSize;
+
+		printf("\n%d %d\n", myrank, rootps);
 
 		double tStart = MPI_Wtime();	//entire execution
 
@@ -1147,6 +1161,9 @@ int main (int argc, char **argv) {
 
 		//form intra-communicator - mainly reqd for processes on a node
 		MPI_Comm_split (MPI_COMM_WORLD, nodeID, myrank, &MPI_COMM_NODE);
+
+		//form intra-communicator per midplane 
+		MPI_Comm_split (MPI_COMM_WORLD, rootps, myrank, &MPI_COMM_MIDPLANE);
 
 		//form intra-communicator - mainly reqd for bridge nodes
 		MPI_Comm_split (MPI_COMM_WORLD, bridgeNodeInfo[1], myrank, &COMM_BRIDGE_NODES);
@@ -1168,7 +1185,7 @@ int main (int argc, char **argv) {
 		if (coreID == 0) formBridgeNodesRoutes ();
 
 		//MPI_Bcast(newBridgeNode, MidplaneSize, MPI_INT, rootps, MPI_COMM_WORLD);	
-		MPI_Bcast(newBridgeNode, MidplaneSize*ppn, MPI_INT, rootps, MPI_COMM_WORLD);	
+		MPI_Bcast(newBridgeNode, MidplaneSize*ppn, MPI_INT, rootps, MPI_COMM_MIDPLANE);	
 		MPI_Bcast(bridgeRanks, numBridgeNodes, MPI_INT, rootps, MPI_COMM_WORLD);	
 
 		//if (bridgeNodeInfo[1] == 1 && coalesced == 0) distributeInfo();

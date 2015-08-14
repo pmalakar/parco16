@@ -8,6 +8,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 #include <mpi.h>
 #include <mpix.h>
 
@@ -18,6 +19,11 @@
  * Size of midplane on BGQ
  */
 //const int MidplaneSize = 512; 
+
+/*
+ * Number of midplanes : Number of processes / MidplaneSize
+ */
+int numMidplanes;
 
 /* 
  * Structure containing BGQ parameters 
