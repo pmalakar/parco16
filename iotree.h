@@ -18,8 +18,6 @@ int numNodes, myWeight, myBNIdx;
 //float avgWeight[numBridgeNodes];
 float currentSum=0.0, currentAvg=0.0;
 
-int *shuffledNodes;
-
 class Node {
 
 	private:
