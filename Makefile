@@ -10,13 +10,24 @@ CXX=mpixlcxx
 endif
 
 #common
-CFLAGS=-O3 -g
-DEBUG=-DCETUS #-DDEBUG
-LIBMPI = #-L/soft/perftools/hpctw/lib -lmpihpm -L/bgsys/drivers/ppcfloor/bgpm/lib -lbgpm -lrt -lstdc++ 
-LIBUTILS =#-L/home/preeti/lib -lmem
+CFLAGS=-g #-S #-O3
+
+ifdef mpi3
+DEFINES += -DBGQ -DCETUS -DMPI3 #-DDEBUG
+else
+DEFINES += -DBGQ -DCETUS #-DDEBUG
+endif
+
+LIBHPM = -L/soft/perftools/hpctw/lib -lmpihpm 
+LIBBGPM = -L/bgsys/drivers/ppcfloor/bgpm/lib -lbgpm -lrt -lstdc++ 
+LIBUTILS =-L/projects/Performance/preeti/utils -lbgqutils
 LIBMPITRACE =-L/soft/perftools/hpctw/lib -lmpitrace
-LIBS += $(LIBMPITRACE) $(LIBUTILS) $(LIBMPI) 
-INC += #-I/home/preeti/inc
+ifdef mpi3
+LIBS += $(LIBUTILS) $(LIBBGPM) #$(LIBMPITRACE)
+else
+LIBS += #$(LIBUTILS) $(LIBBGPM) $(LIBMPITRACE)
+endif
+INC += -I/projects/Performance/preeti/utils	
 
 SRCS = 	route.cxx \
 		personality.cxx \
@@ -26,7 +37,7 @@ SRCS = 	route.cxx \
 OBJS = 	$(SRCS:.cxx=.o)
 
 ifdef mpi3
-TARGET = iotree.mpi3
+TARGET = iotree.mpi3.test
 else
 TARGET = iotree 
 endif
@@ -35,10 +46,10 @@ all:    $(TARGET)
 		@echo Compilation done.
 
 %.o:%.cxx
-		$(CXX) $(CFLAGS) -c $< -o $@ -DBGQ $(INC) $(DEBUG) $(LIBS) $(DEFINES)
+		$(CXX) $(CFLAGS) -c $< -o $@ $(INC) $(LIBS) $(DEFINES)
 
 $(TARGET): $(OBJS) 
-		$(CXX) $(CFLAGS) -o $(TARGET) -DBGQ $(INC) $(DEBUG) $(LIBS) $(OBJS) $(DEFINES)   
+		$(CXX) $(CFLAGS) -o $(TARGET) $(OBJS) $(INC) $(LIBS) $(DEFINES)   
 
 clean:
 		$(RM) *.o *~
