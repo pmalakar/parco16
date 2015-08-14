@@ -1186,7 +1186,7 @@ int main (int argc, char **argv) {
 		int count = fileSize;				//weak scaling
 		dataBlock *datum = new dataBlock(count);			//initializes alpha array to random double values
 
-		bgpminit();
+		//bgpminit();
 
 		//Testing BGQ compute nodes to IO nodes performance
 		//Write to /dev/null
@@ -1285,7 +1285,7 @@ int main (int argc, char **argv) {
 
 		//* * * * * * * * * * * * * * * * * * * * * * * * * * * End of IO * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
-		bgpmfinalize();
+		//bgpmfinalize();
 
 		double max[5];
 
@@ -1299,8 +1299,8 @@ int main (int argc, char **argv) {
 			printf ("Times: %d: %d: %d: %d | %d %d | %6.2f | %lf %lf | %lf\n", type, blocking, coalesced, commsize, ppn, omp_get_num_threads(), 8.0*fileSize/1024.0, max[0], max[1], max[2]);
 		}
 
-    PrintCounts("NW", hNWSet, myrank);
-    PrintCounts("IO", hIOSet, myrank);
+    //PrintCounts("NW", hNWSet, myrank);
+    //PrintCounts("IO", hIOSet, myrank);
 
 		return 0;
 
