@@ -39,7 +39,7 @@ OBJS = 	$(SRCS:.cxx=.o)
 ifdef mpi3
 TARGET = iotree.mpi3.test
 else
-TARGET = iotree 
+TARGET = iotree-mod
 endif
 
 all:    $(TARGET)
