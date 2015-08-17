@@ -579,6 +579,7 @@ void expandNode (Node *currentNodePtr) {
 
 		// check all eligible neighbours
 		int localNode = neighbourRanks[currentNode][j] ;
+	printf ("%d: currentNode %d localNode %d rootid %d\n", myrank, currentNode, localNode, rootid);
 #ifdef DEBUG
 		if (myrank == bridgeRanks[bridgeNodeCurrIdx])
 			printf ("%d: check for %d neighbour %d of %d\n", myrank, localNode, j, currentNode);
@@ -1146,7 +1147,7 @@ int main (int argc, char **argv) {
 		//gather bridgeNodeInfo at the rootps
 		//bridgeNodeAll - per root
 		double ts = MPI_Wtime();
-		MPI_Gather (bridgeNodeInfo, 2, MPI_INT, bridgeNodeAll, 2, MPI_INT, rootps, MPI_COMM_MIDPLANE);
+		MPI_Gather (bridgeNodeInfo, 2, MPI_INT, bridgeNodeAll, 2, MPI_INT, 0, MPI_COMM_MIDPLANE);
 		ts = MPI_Wtime() - ts;
 
 #ifdef DEBUG
@@ -1158,8 +1159,8 @@ int main (int argc, char **argv) {
 		double tOStart = MPI_Wtime();
 		if (coreID == 0) formBridgeNodesRoutes ();
 
-		MPI_Bcast(newBridgeNode, MidplaneSize*ppn, MPI_INT, rootps, MPI_COMM_MIDPLANE);	
-		MPI_Bcast(bridgeRanks, numBridgeNodes, MPI_INT, rootps, MPI_COMM_MIDPLANE);	
+		MPI_Bcast(newBridgeNode, MidplaneSize*ppn, MPI_INT, 0, MPI_COMM_MIDPLANE);	
+		MPI_Bcast(bridgeRanks, numBridgeNodes, MPI_INT, 0, MPI_COMM_MIDPLANE);	
 
 		//if (bridgeNodeInfo[1] == 1 && coalesced == 0) distributeInfo();
 		if (bridgeNodeInfo[1] == 1) distributeInfo();
