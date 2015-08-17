@@ -349,13 +349,13 @@ int build5DTorus (int root) {
 	}
 	double tEnd = MPI_Wtime() - tStart;
 
-#ifdef DEBUG
+//#ifdef DEBUG
 	printf("%d: findNeighbours time taken: %lf\n", myrank, tEnd);	
 
-	for (int i=0; i<MidplaneSize ; i++)
+	for (int i=0; i<MidplaneSize*ppn ; i++)
 		for (int j=0; j<10 ; j++)
 			printf ("%d: Nghbr %d of %d -- %d;\n", myrank, j, i, neighbourRanks[i][j]);
-#endif
+//#endif
 
 	return 0;
 
