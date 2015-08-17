@@ -11,9 +11,9 @@ int **neighbourRanks;	//[MidplaneSize][10];
 int NUM_NEIGHBOURS=10;
 
 //called before calling findNeighbours for the first time
-void initNeighbours() {
-	neighbourRanks = new int * [MidplaneSize*ppn];
-	for (int i=0 ; i<MidplaneSize*ppn ; i++)
+void initNeighbours(int size) {
+	neighbourRanks = new int * [size]; // [MidplaneSize*ppn];
+	for (int i=0 ; i<size ; i++)
 		neighbourRanks[i] = new int[NUM_NEIGHBOURS];
 }
 

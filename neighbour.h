@@ -5,7 +5,7 @@
 extern int **neighbourRanks;// = {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
 //extern int neighbourRanks[][10];
 
-void initNeighbours (void); 
+void initNeighbours (int); 
 int findNeighbours (int, int); 
 
 #endif
