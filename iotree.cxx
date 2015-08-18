@@ -484,6 +484,7 @@ void traverse (int index, int level) {
 		nChildren = node->getNumChildren();
 		nid = node->getNodeId(), rid=node->getRootId();
 
+		printf ("%d: nid %d lastCount %d nChildren %d\n", myrank, nid, lastCount, nChildren);
 		for (i=0; i<nChildren; i++) {
 
 			assert(index>=0 && index<numBridgeNodes);
@@ -492,6 +493,8 @@ void traverse (int index, int level) {
 			rootNodeList[index].push (node->getChild(i));
 			child = node->getChildId(i);
 			depth = (node->getChild(i))->getDepth();
+			printf ("%d: child %d depth %d i %d\n", myrank, child, depth, i);
+
 #ifdef DEBUG
 //TODO check seg fault
 //			if (myrank == rid) { 
@@ -540,6 +543,9 @@ void traverse (int index, int level) {
 						//else assign to someone else
 				}
 			}
+			else {
+				printf("\n%d processed already %d", myrank, child);
+			}
 		}
 		count++;
 	}
@@ -562,7 +568,6 @@ bool isParent (Node *child, int nodeId) {
 
 
 //			visit all children, take global decision, fcfs child formation fails to get all nodes
-//			visited[localNode] = true;		//trying to find how many satisfy default routes
 
 void expandNode (Node *currentNodePtr) {
 		
@@ -577,35 +582,35 @@ void expandNode (Node *currentNodePtr) {
 	for (int j=8; j>=0; j--) {		//start with the lowest differing dimension neighbour to "hope 4" default path
 
 		// check all eligible neighbours
-		int localNode = (neighbourRanks[currentNode][j])%(MidplaneSize*ppn) ;
-#ifdef DEBUG
+		int localNodeRank = neighbourRanks[currentNode][j];
+		int localNode = (neighbourRanks[currentNode][j])%(MidplaneSize*ppn);
+//#ifdef DEBUG
 		if (myrank == bridgeRanks[bridgeNodeCurrIdx])
 			printf ("%d: check for %d neighbour %d of %d\n", myrank, localNode, j, currentNode);
-#endif
+//#endif
 
 		if (currentNodePtr != root && isParent(currentNodePtr, localNode) == true) continue;
 
 		if (visited[localNode] == false) {
 			//check if network path from localNode (which is a neighbour of currentNodePtr) to the BN (rootid) is a path in the tree of children from BN 
-			int success = checkDefaultRoutes(rootid, currentNodePtr, localNode, myrank);
-#ifdef DEBUG
-			printf ("%d: success %d for check route from %d\n", myrank, success, localNode);
-#endif
+			int success = checkDefaultRoutes(rootid, currentNodePtr, localNodeRank, myrank);
+//#ifdef DEBUG
+			printf ("%d: success %d for check route from %d (%d)\n", myrank, success, localNode, localNodeRank);
+//#endif
 			if (success) {
 
-	printf ("%d: currentNode %d localNode %d rootid %d\n", myrank, currentNode, localNode, rootid);
+	printf ("%d: rootid %d currentNode %d localNode %d localNodeRank %d\n", myrank, rootid, currentNode, localNode, localNodeRank);
 
 				childNum ++;
 				Node *childNodePtr = currentNodePtr->addChild(localNode, rootid);
 				nodeList.push (childNodePtr);
 				int currDepth = childNodePtr->getDepth();
 				depthInfo[bridgeNodeCurrIdx][localNode] = currDepth;
-#ifdef DEBUG
+//#ifdef DEBUG
 				if (myrank == bridgeRanks[bridgeNodeCurrIdx]) {
 					printf("%d: %d is new child of %d\n", myrank, localNode, currentNode);
-					printf("%d DEBUG: %d has been visited as neighbour of %d\n", myrank, localNode, currentNode); 
-				}
-#endif
+					printf("%d DEBUG: %d has been visited as neighbour of %d\n", myrank, localNode, currentNode); 			}
+//#endif
 
 				//resolve distance metric later
 				//if(depthInfo[bridgeNodeCurrIdx][localNode] > currDepth+1) {
@@ -631,19 +636,16 @@ void expandNode (Node *currentNodePtr) {
 
 			}
 		}
-
-		//if (childNum == 3 || numNodes>63)		break;
-		//if (numNodes>63)		break;		//TEST: discover all
 	}
 
 	if (numNodes > 0)
 		numNodes += childNum;
-#ifdef DEBUG
+//#ifdef DEBUG
 	if (myrank == bridgeRanks[bridgeNodeCurrIdx]) {
 		printf("%d: numNodes %d childNum %d\n", myrank, numNodes, childNum);
 		if(!nodeList.empty()) printf("%d: empty queue size %d\n", myrank, nodeList.size());
 	}
-#endif
+//#endif
 
 	//if (childNum != 3) printf ("%d: ERROR: childNum not 3 but %d\n", myrank, childNum);
 int BAG = 64;
@@ -655,10 +657,10 @@ int BAG = 64;
 	//	numNodes = 0;
 		//no more expansion for this node?
 		while(!nodeList.empty())	nodeList.pop();	
-#ifdef DEBUG
+//#ifdef DEBUG
 	if (myrank == bridgeRanks[bridgeNodeCurrIdx]) 
 		printf("%d: queue size %d\n", myrank, nodeList.size());
-#endif
+//#endif
 		return;
 	}
 	else {
