@@ -53,6 +53,12 @@ MPI_Comm MPI_COMM_core, MPI_COMM_NODE;
 MPI_Comm MPI_COMM_MIDPLANE;
 MPI_Comm COMM_BRIDGE_NODES, COMM_BRIDGE_NODES_core;
 
+#ifdef CETUS
+int BAG = 256;
+#else
+int BAG = 64;
+#endif
+
 //Average load per BN
 float *avgWeight;			//[numBridgeNodes];
 
@@ -631,27 +637,21 @@ void expandNode (Node *currentNodePtr) {
 					  myrank, bridgeNodeAll[localNode*2+1], bridgeNodeAll[localNode*2], currentNode, localNode, currDepth);
 				}
 #endif
-
 //build map... ??
-
 			}
 		}
 	}
 
 	if (numNodes > 0)
 		numNodes += childNum;
+
 //#ifdef DEBUG
 	if (myrank == bridgeRanks[bridgeNodeCurrIdx]) {
 		printf("%d: numNodes %d childNum %d\n", myrank, numNodes, childNum);
 		if(!nodeList.empty()) printf("%d: empty queue size %d\n", myrank, nodeList.size());
+		printf ("%d: childNum %d BAG %d numNodes %d\n", myrank, childNum, BAG);
 	}
 //#endif
-
-	//if (childNum != 3) printf ("%d: ERROR: childNum not 3 but %d\n", myrank, childNum);
-int BAG = 64;
-#ifdef CETUS
-	BAG = 256;
-#endif
 
 	if (numNodes > BAG) {
 	//	numNodes = 0;
