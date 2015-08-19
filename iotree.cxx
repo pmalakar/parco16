@@ -118,9 +118,9 @@ int writeFile(dataBlock *datum, int count, int all) {
 			  int index = (nodeID*ppn) % (MidplaneSize*ppn);
 		  	if(newBridgeNode[index] != -1) {	
 					int	myBridgeRank = bridgeRanks[newBridgeNode[index]] + coreID; 
-//#ifdef DEBUG
+#ifdef DEBUG
 	printf("%d will send to %d\n", myrank, myBridgeRank);		
-//#endif
+#endif
 
 					if (coalesced == 1) {
 						double *dataPerNode;
@@ -518,7 +518,9 @@ void traverse (int index, int level) {
 			if (!processed[child]) {
 
 				int childIdx = child % (MidplaneSize * ppn);
+#ifdef DEBUG
 				printf("%d process child %d %d\n", myrank, child, childIdx);
+#endif
 			 	newBridgeNode[childIdx] = -1;//index;
 				newDepth = 254; //depth;
 
@@ -549,18 +551,18 @@ void traverse (int index, int level) {
 					currentAvg = currentSum/numBridgeNodes;
 
 					processed[child] = true;
-//#ifdef DEBUG
+#ifdef DEBUG
 					printf("%d: Processed %d cSum %4.2lf cAvg %4.2f wt[ %d ](%d) = %4.2f\n", myrank, child, currentSum, currentAvg, bridgeRanks[newBridgeNode[childIdx]], newBridgeNode[childIdx], avgWeight[newBridgeNode[childIdx]]);
-//#endif
+#endif
 				}
 				else {
 						//else assign to someone else
 				}
 			}
 			else {
-//#ifdef DEBUG
+#ifdef DEBUG
 				printf("%d processed already %d\n", myrank, child);
-//#endif
+#endif
 			}
 		}
 		count++;
@@ -601,13 +603,14 @@ void expandNode (Node *currentNodePtr) {
 		int localNode = neighbourRanks[currentNode][j];
 
 		if (localNode < lb || localNode >= ub) {
-//#ifdef DEBUG	
+#ifdef DEBUG	
 			printf("%d: localNode %d %d %d\n", myrank, localNode, lb, ub);
-//#endif
+#endif
 		 	continue;
 		}
 
 		int localNode_ = (neighbourRanks[currentNode][j])%(MidplaneSize*ppn);
+
 #ifdef DEBUG
 		if (myrank == bridgeRanks[bridgeNodeCurrIdx])
 			printf ("%d: check for %d neighbour %d of %d\n", myrank, localNode, j, currentNode);
@@ -615,7 +618,7 @@ void expandNode (Node *currentNodePtr) {
 
 		if (currentNodePtr != root && isParent(currentNodePtr, localNode) == true) continue;
 
-		//assert(visited[localNode]);
+		//assert(visited);
 
 		if (visited[localNode] == false) {
 			//check if network path from localNode (which is a neighbour of currentNodePtr) to the BN (rootid) is a path in the tree of children from BN 
@@ -626,7 +629,7 @@ void expandNode (Node *currentNodePtr) {
 			if (success) {
 
 #ifdef DEBUG
-	printf ("%d: rootid %d currentNode %d localNode %d\n", myrank, rootid, currentNode, localNode);
+			printf ("%d: rootid %d currentNode %d localNode %d\n", myrank, rootid, currentNode, localNode);
 #endif
 				childNum ++;
 				Node *childNodePtr = currentNodePtr->addChild(localNode, rootid);
@@ -745,9 +748,9 @@ void formBridgeNodesRoutes () {
 		MPI_Request request[numBridgeNodes], requestAll[numBridgeNodes];
 		MPI_Status status[numBridgeNodes];
 
-#ifdef DEBUG
+//#ifdef DEBUG
 		printf("I am the rootps %d\n", myrank);
-#endif
+//#endif
 		tStart = MPI_Wtime();
 		for (int iter = 0; iter < numBridgeNodes ; iter ++) {
 			result = MPI_Irecv (&bridgeRanks[iter], 1, MPI_INT, MPI_ANY_SOURCE, 100, MPI_COMM_WORLD, &request[iter]);
@@ -912,18 +915,17 @@ void formBridgeNodesRoutes () {
 			}
 		}
 
-//#ifdef DEBUG
+#ifdef DEBUG
 		for (j=0; j<MidplaneSize*ppn ; j++) 
 			if (newBridgeNode[j] >= 0)
 				printf("%d: %d (%d) is the new BN for %d\n", myrank, bridgeRanks[newBridgeNode[j]], newBridgeNode[j], j);
-//#endif
+#endif
 
 		for (bn=0; bn<numBridgeNodes ; bn++) 
 			if (bridgeRanks[bn] == myrank) myWeight = int(avgWeight[bn]);
 
 	  if (myrank == bridgeRanks[0])
 			MPI_Send(newBridgeNode, MidplaneSize*ppn, MPI_INT, rootps, bridgeRanks[0], MPI_COMM_WORLD);	
-	
 
 /*
  *
@@ -940,71 +942,8 @@ void formBridgeNodesRoutes () {
 		//	dim 0 - 0 or 1 - whether to revisit or not
 		//	dim 1 - smallest depth 
 		//	dim 2 - bridgenode with the smallest depth 
-	
-		currentAvg=currentSum/numBridgeNodes;
-
-		for (bn=0; bn<numBridgeNodes ; bn++)
-			avgWeight[bn]=0;
-
-		for (j=0; j<MidplaneSize ; j++)
-			newBridgeNode[j] = -1;
-
-		int winner=-1;
-		for (j=0; j<MidplaneSize ; j++) {
-			winner = bridgeNodeAll[2*j];			//default BN
-		  for (bn=0; bn<numBridgeNodes ; bn++) {
-		  	printf("%d: revisit %d %d %d %d %d\n", myrank, j, revisit[j][1], depthInfo[bn][j], revisit[j][0], bridgeRanks[bn]);
-		  	if ((revisit[j][1] > 1+depthInfo[bn][j]) && revisit[j][0] != 255 && depthInfo[bn][j] != -1 && bridgeNodeAll[2*j] != bridgeRanks[bn]) { //TODO check if this is child of 9? i.e. isChild() == true 
-
-					if (avgWeight[bn] > currentAvg) {
-						printf("%d: not assigning %d (%d) for %d to balance\n", myrank, bridgeRanks[bn], depthInfo[bn][j], j);
-						continue;
-					}
-					printf("%d: BN may be changing for %d: old: %d (%d) new: %d (%d)\n", myrank, j, revisit[j][1], newBridgeNode[j], bridgeRanks[bn], depthInfo[bn][j]);
-					revisit[j][1] = depthInfo[bn][j]; newBridgeNode[j] = bridgeRanks[bn]; winner = bn;
-					printf("%d: BN may change for %d: originally assigned: %d (%d) new: %d (%d)\n", myrank, j, bridgeNodeAll[2*j], bridgeNodeAll[2*j+1], newBridgeNode[j], depthInfo[bn][j]);
-		 		}
-		  }
-
-			if (newBridgeNode[j] != -1) {
-				++currentSum;
-				currentAvg = currentSum/numBridgeNodes;
-				avgWeight[winner] += 1;
-
-				printf("%d: Processed node %d, currentSum %4.2lf currentAvg %4.2f weight[%d](%d) = %d\n", myrank, j, currentSum, currentAvg, winner, bridgeRanks[winner], avgWeight[winner]);
-			}
-		}
-
-		for (bn=0; bn<numBridgeNodes ; bn++) {
-			printf("%d: currentAvg %4.2f weight[%d](%d) = %d\n", myrank, currentAvg, bn, bridgeRanks[bn], avgWeight[bn]);
-			if (bridgeRanks[bn] == myrank) myWeight = avgWeight[bn];
-		}
-
-		int k=-1;
-		shuffledNodes = (int *) malloc (myWeight * sizeof(int));
-		for (j=0; j<myWeight ; j++) 
-			shuffledNodes[j] = -1;
-
-		for (j=0; j<MidplaneSize ; j++) {
-		 	//if (revisit[j][0] != 255 && myrank == revisit[j][2]) 
-		 	if (revisit[j][0] != 255 && newBridgeNode[j] != -1) 
-				printf("%d: %d (%d) is the new BN for %d: Old: %d (%d)\n", myrank, newBridgeNode[j], revisit[j][1], j, bridgeNodeAll[j*2], bridgeNodeAll[j*2+1]);
-			if (newBridgeNode[j] == myrank) 
-					shuffledNodes[++k] = j;
-		}
-
-		if (k+1 != myWeight) printf("%d: Error in number of shuffledNodes: %d %d\n", myrank, k, myWeight);
-
-	
-	MPI_Bcast(&newBridgeNode, MidplaneSize, MPI_INT, bridgeRanks[0], MPI_COMM_MIDPLANE);	//TODO subcomm for the midplane
-	MPI_Bcast(&revisit, MidplaneSize*2, MPI_BYTE, bridgeRanks[0], MPI_COMM_MIDPLANE);	//TODO subcomm for the midplane
-
 */
-
-		
 	}
-
-
 }
 
 
@@ -1030,29 +969,28 @@ void distributeInfo() {
 		int k=-1;
 		//for (j=0; j<MidplaneSize ; j++) { 
 		for (j=0; j<MidplaneSize*ppn ; j=j+ppn) { 
-//#ifdef DEBUG
+#ifdef DEBUG
 			if (newBridgeNode[j] >= 0) 
 				printf ("%d: checking: %d %d %d %d %d\n", myrank, nodeID, coreID, j, bridgeRanks[newBridgeNode[j]], bridgeNodeAll[j*2+1]);
-//#endif
-			//if (bridgeRanks[newBridgeNode[j]] == myrank && bridgeNodeAll[j*2+1]>1) {
-			if (newBridgeNode[j] >= 0 && bridgeRanks[newBridgeNode[j]] == nodeID*ppn && bridgeNodeAll[j*2+1]>1) {
+#endif
+
+			if (newBridgeNode[j] >= 0 && bridgeRanks[newBridgeNode[j]] == nodeID*ppn && bridgeNodeAll[j*2+1]>1) 
+			{
 				k++;
 				shuffledNodes[k] = lb + j + coreID;
-//#ifdef DEBUG
+#ifdef DEBUG
 				printf("%d:(%d,%d) k=%d newBridgeNode[%d]=%d bn=%d %d\n", myrank, nodeID, coreID, k, j, newBridgeNode[j], bridgeRanks[newBridgeNode[j]], shuffledNodes[k]); 
-//#endif
+#endif
 			}
 		}
 
-//#ifdef DEBUG
-		if (k+1 != myWeight) printf("%d: Error in number of shuffledNodes: %d %d\n", myrank, k, myWeight);
-//#endif
-
-//		for (j=0; j<MidplaneSize*ppn ; j++) 
-//			if (newBridgeNode[j] >= 0)
-//				printf("%d: %d (%d) is the new BN for %d\n", myrank, bridgeRanks[newBridgeNode[j]], newBridgeNode[j], j);
+		if (k+1 != myWeight) {
+		 printf("%d: Error in number of shuffledNodes: %d %d\n", myrank, k, myWeight);
+		//abort
+		}
 
 		MPI_Barrier (COMM_BRIDGE_NODES);	
+
 }
 
 void initTree(int n) {
@@ -1091,7 +1029,7 @@ int main (int argc, char **argv) {
 		numBridgeNodesAll = numBridgeNodes * numMidplanes;		//cetus/mira 
 
 #ifdef DEBUG
-		printf("\n%d %d %d\n", numMidplanes, MidplaneSize, numBridgeNodesAll);
+		printf("\nLogistics: %d %d %d\n", numMidplanes, MidplaneSize, numBridgeNodesAll);
 #endif
 
 		int i, c;
@@ -1113,7 +1051,7 @@ int main (int argc, char **argv) {
 		lb = floor(myrank/(MidplaneSize*ppn)) * (MidplaneSize*ppn);
 		ub = lb + (MidplaneSize*ppn);
 
-		printf("\n%d: lb=%d ub=%d\n", myrank, lb, ub);
+		//printf("%d: lb=%d ub=%d\n", myrank, lb, ub);
 
 		bridgeNodeAll = new int [2*MidplaneSize*ppn];
 		newBridgeNode = new int [MidplaneSize*ppn];
@@ -1147,7 +1085,7 @@ int main (int argc, char **argv) {
 
 		rootNodeList = new queue<Node *> [numBridgeNodes];
 
-		rootps = floor(myrank/(MidplaneSize*ppn)) * MidplaneSize;
+		rootps = floor(myrank/(MidplaneSize*ppn)) * (MidplaneSize*ppn);
 
 		//printf("\n%d %d\n", myrank, rootps);
 
@@ -1167,8 +1105,15 @@ int main (int argc, char **argv) {
 
 		//form intra-communicator - mainly reqd for bridge nodes
 		MPI_Comm_split (MPI_COMM_WORLD, bridgeNodeInfo[1], myrank, &COMM_BRIDGE_NODES);
+
 		//form intra-communicator - mainly reqd for bridge nodes core wise
 		MPI_Comm_split (COMM_BRIDGE_NODES, coreID, myrank, &COMM_BRIDGE_NODES_core);
+
+		//int size;
+		//MPI_Comm_size (COMM_BRIDGE_NODES, &size);
+		//printf("comm_bridge_nodes size %d\n", size);
+		//MPI_Comm_size (COMM_BRIDGE_NODES_core, &size);
+		//printf("comm_bridge_nodes_core size %d\n", size);
 
 		//gather bridgeNodeInfo at the rootps
 		//bridgeNodeAll - per root
