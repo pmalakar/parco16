@@ -119,7 +119,7 @@ int writeFile(dataBlock *datum, int count, int all) {
 		  	if(newBridgeNode[index] != -1) {	
 					int	myBridgeRank = bridgeRanks[newBridgeNode[index]] + coreID; 
 //#ifdef DEBUG
-printf("%d will send to %d\n", myrank, myBridgeRank);		
+	printf("%d will send to %d\n", myrank, myBridgeRank);		
 //#endif
 
 					if (coalesced == 1) {
@@ -231,11 +231,11 @@ printf("%d will gather\n", myrank);
 				 for (int i=0; i<arrayLength ; i++) { 
 					assert(shuffledNodesData);
 					assert(shuffledNodesData[i]);
+			//		assert(shuffledNodes[i]);
 #ifdef DEBUG
 					printf("\n%d: myWeight = %d arrayLength = %d\n\n", myrank, myWeight, arrayLength);
-#endif
-			//		assert(shuffledNodes[i]);
 					printf("\n%d: myWeight = %d shuffledNodes[%d] = %d\n\n", myrank, myWeight, i, shuffledNodes[i]);
+#endif
 					MPI_Irecv (shuffledNodesData[i], count*ppn, MPI_DOUBLE, shuffledNodes[i], myrank, MPI_COMM_WORLD, &req[i]);				
 				 }
 
@@ -440,15 +440,15 @@ int checkDefaultRoutes (int destination, Node *parentNode, int newNode, int myra
 				printf("%d: match for %d: intmdt_node %d = parent %d, destination= %d\n", myrank, newNode, parentId, parent, destination);
 #endif
 				current = current->getParent();
-#ifdef DEBUG
 				if (current == NULL) {
+#ifdef DEBUG
 					if(parentId != destination)
 						printf("%d: root reached beforehand? error for %d\n", myrank, newNode);
 					else 
 						printf("%d: Did %d reach %d?\n", myrank, newNode, destination);
+#endif
 					break;
 				}
-#endif
 			}
 			else {
 				flag = 0;
@@ -492,7 +492,9 @@ void traverse (int index, int level) {
 		nChildren = node->getNumChildren();
 		nid = node->getNodeId(), rid=node->getRootId();
 
+#ifdef DEBUG
 		printf ("%d: nid %d lastCount %d nChildren %d\n", myrank, nid, lastCount, nChildren);
+#endif
 		for (i=0; i<nChildren; i++) {
 
 			assert(index>=0 && index<numBridgeNodes);
@@ -501,7 +503,9 @@ void traverse (int index, int level) {
 			rootNodeList[index].push (node->getChild(i));
 			child = node->getChildId(i);
 			depth = (node->getChild(i))->getDepth();
+#ifdef DEBUG
 			printf ("%d: child %d depth %d i %d\n", myrank, child, depth, i);
+#endif
 
 #ifdef DEBUG
 //TODO check seg fault
@@ -518,21 +522,21 @@ void traverse (int index, int level) {
 
 				for (bn=0; bn<numBridgeNodes ; bn++) {
 				
-//#ifdef DEBUG
+#ifdef DEBUG
 					printf("%d: %d: currentAvg %4.2f currentSum %4.2f avgWeight[%d]=%4.2f\n", myrank, child, currentAvg, currentSum, bn, avgWeight[bn]);
-//#endif
+#endif
 				 	if (avgWeight[bn] > currentAvg) {
-//#ifdef DEBUG
+#ifdef DEBUG
 						printf("%d: not assigning %d to %d (%d) to balance\n", myrank, child, bridgeRanks[bn], depthInfo[bn][child]);
-//#endif
+#endif
 						continue;
 				 	}
 				 	if (depthInfo[bn][child] < newDepth) {// && avgWeight[bn] <= currentAvg) {
 						newBridgeNode[child] = bn;
 					 	newDepth = depthInfo[bn][child];
-//#ifdef DEBUG
+#ifdef DEBUG
 						printf("%d: May assign %d to %d (%d) current avgWeight[%d]=%4.2f\n", myrank, child, bridgeRanks[bn], newDepth, bn, avgWeight[bn]);
-//#endif
+#endif
 				 	}
 				}
 
@@ -543,16 +547,18 @@ void traverse (int index, int level) {
 					currentAvg = currentSum/numBridgeNodes;
 
 					processed[child] = true;
-//#ifdef DEBUG
+#ifdef DEBUG
 					printf("%d: Processed %d cSum %4.2lf cAvg %4.2f wt[ %d ](%d) = %4.2f\n", myrank, child, currentSum, currentAvg, bridgeRanks[newBridgeNode[child]], newBridgeNode[child], avgWeight[newBridgeNode[child]]);
-//#endif
+#endif
 				}
 				else {
 						//else assign to someone else
 				}
 			}
 			else {
+#ifdef DEBUG
 				printf("\n%d processed already %d", myrank, child);
+#endif
 			}
 		}
 		count++;
@@ -593,40 +599,43 @@ void expandNode (Node *currentNodePtr) {
 		int localNode = neighbourRanks[currentNode][j];
 
 		if (localNode < lb || localNode >= ub) {
+//#ifdef DEBUG	
 			printf("%d: localNode %d %d %d\n", myrank, localNode, lb, ub);
+//#endif
 		 	continue;
 		}
 
 		int localNode_ = (neighbourRanks[currentNode][j])%(MidplaneSize*ppn);
-//#ifdef DEBUG
+#ifdef DEBUG
 		if (myrank == bridgeRanks[bridgeNodeCurrIdx])
 			printf ("%d: check for %d neighbour %d of %d\n", myrank, localNode, j, currentNode);
-//#endif
+#endif
 
 		if (currentNodePtr != root && isParent(currentNodePtr, localNode) == true) continue;
 
-		assert(visited[localNode]);
+		//assert(visited[localNode]);
 
 		if (visited[localNode] == false) {
 			//check if network path from localNode (which is a neighbour of currentNodePtr) to the BN (rootid) is a path in the tree of children from BN 
 			int success = checkDefaultRoutes(rootid, currentNodePtr, localNode, myrank);
-//#ifdef DEBUG
+#ifdef DEBUG
 			printf ("%d: success %d for check route from %d\n", myrank, success, localNode);
-//#endif
+#endif
 			if (success) {
 
+#ifdef DEBUG
 	printf ("%d: rootid %d currentNode %d localNode %d\n", myrank, rootid, currentNode, localNode);
-
+#endif
 				childNum ++;
 				Node *childNodePtr = currentNodePtr->addChild(localNode, rootid);
 				nodeList.push (childNodePtr);
 				int currDepth = childNodePtr->getDepth();
 				depthInfo[bridgeNodeCurrIdx][localNode] = currDepth;
-//#ifdef DEBUG
+#ifdef DEBUG
 				if (myrank == bridgeRanks[bridgeNodeCurrIdx]) {
 					printf("%d: %d is new child of %d\n", myrank, localNode, currentNode);
 					printf("%d DEBUG: %d has been visited as neighbour of %d\n", myrank, localNode, currentNode); 			}
-//#endif
+#endif
 
 				//resolve distance metric later
 				if(bridgeNodeAll[localNode_*2+1] > currDepth+1) {
@@ -653,21 +662,21 @@ void expandNode (Node *currentNodePtr) {
 	if (numNodes >= 0)
 		numNodes += childNum;
 
-//#ifdef DEBUG
+#ifdef DEBUG
 	if (myrank == bridgeRanks[bridgeNodeCurrIdx]) {
 		printf("%d: numNodes %d childNum %d BAG %d\n", myrank, numNodes, childNum, BAG);
 		if(!nodeList.empty()) printf("%d: empty queue size %d\n", myrank, nodeList.size());
 	}
-//#endif
+#endif
 
 	if (numNodes > BAG) {
 	//	numNodes = 0;
 		//no more expansion for this node?
 		while(!nodeList.empty())	nodeList.pop();	
-//#ifdef DEBUG
+#ifdef DEBUG
 	if (myrank == bridgeRanks[bridgeNodeCurrIdx]) 
 		printf("%d: queue size %d\n", myrank, nodeList.size());
-//#endif
+#endif
 		return;
 	}
 	else {
@@ -1100,7 +1109,7 @@ int main (int argc, char **argv) {
 		double tAStart, tAEnd; 
 
 		lb = floor(myrank/(MidplaneSize*ppn)) * (MidplaneSize*ppn);
-		ub = ceil(myrank/(MidplaneSize*ppn)) * (MidplaneSize*ppn);
+		ub = lb + (MidplaneSize*ppn);
 
 		printf("\n%d: lb=%d ub=%d\n", myrank, lb, ub);
 
