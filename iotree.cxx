@@ -231,11 +231,11 @@ printf("%d will gather\n", myrank);
 				 for (int i=0; i<arrayLength ; i++) { 
 					assert(shuffledNodesData);
 					assert(shuffledNodesData[i]);
-			//		assert(shuffledNodes[i]);
+			//		assert(shuffledNodes);
 #ifdef DEBUG
 					printf("\n%d: myWeight = %d arrayLength = %d\n\n", myrank, myWeight, arrayLength);
-					printf("\n%d: myWeight = %d shuffledNodes[%d] = %d\n\n", myrank, myWeight, i, shuffledNodes[i]);
 #endif
+					printf("\n%d: myWeight = %d shuffledNodes[%d] = %d\n\n", myrank, myWeight, i, shuffledNodes[i]);
 					MPI_Irecv (shuffledNodesData[i], count*ppn, MPI_DOUBLE, shuffledNodes[i], myrank, MPI_COMM_WORLD, &req[i]);				
 				 }
 
@@ -517,7 +517,9 @@ void traverse (int index, int level) {
 			//find the weighted min depth for child if not already processed
 			if (!processed[child]) {
 
-			 	newBridgeNode[child] = -1;//index;
+				int childIdx = child % (MidplaneSize * ppn);
+				printf("%d process child %d %d\n", myrank, child, childIdx);
+			 	newBridgeNode[childIdx] = -1;//index;
 				newDepth = 254; //depth;
 
 				for (bn=0; bn<numBridgeNodes ; bn++) {
@@ -532,7 +534,7 @@ void traverse (int index, int level) {
 						continue;
 				 	}
 				 	if (depthInfo[bn][child] < newDepth) {// && avgWeight[bn] <= currentAvg) {
-						newBridgeNode[child] = bn;
+						newBridgeNode[childIdx] = bn;
 					 	newDepth = depthInfo[bn][child];
 #ifdef DEBUG
 						printf("%d: May assign %d to %d (%d) current avgWeight[%d]=%4.2f\n", myrank, child, bridgeRanks[bn], newDepth, bn, avgWeight[bn]);
@@ -540,25 +542,25 @@ void traverse (int index, int level) {
 				 	}
 				}
 
-				if (newBridgeNode[child] != -1) {
+				if (newBridgeNode[childIdx] != -1) {
 					//adjust the weights
 					++currentSum;
-					avgWeight[newBridgeNode[child]] += 1.0;
+					avgWeight[newBridgeNode[childIdx]] += 1.0;
 					currentAvg = currentSum/numBridgeNodes;
 
 					processed[child] = true;
-#ifdef DEBUG
-					printf("%d: Processed %d cSum %4.2lf cAvg %4.2f wt[ %d ](%d) = %4.2f\n", myrank, child, currentSum, currentAvg, bridgeRanks[newBridgeNode[child]], newBridgeNode[child], avgWeight[newBridgeNode[child]]);
-#endif
+//#ifdef DEBUG
+					printf("%d: Processed %d cSum %4.2lf cAvg %4.2f wt[ %d ](%d) = %4.2f\n", myrank, child, currentSum, currentAvg, bridgeRanks[newBridgeNode[childIdx]], newBridgeNode[childIdx], avgWeight[newBridgeNode[childIdx]]);
+//#endif
 				}
 				else {
 						//else assign to someone else
 				}
 			}
 			else {
-#ifdef DEBUG
-				printf("\n%d processed already %d", myrank, child);
-#endif
+//#ifdef DEBUG
+				printf("%d processed already %d\n", myrank, child);
+//#endif
 			}
 		}
 		count++;
@@ -910,11 +912,11 @@ void formBridgeNodesRoutes () {
 			}
 		}
 
-#ifdef DEBUG
+//#ifdef DEBUG
 		for (j=0; j<MidplaneSize*ppn ; j++) 
 			if (newBridgeNode[j] >= 0)
 				printf("%d: %d (%d) is the new BN for %d\n", myrank, bridgeRanks[newBridgeNode[j]], newBridgeNode[j], j);
-#endif
+//#endif
 
 		for (bn=0; bn<numBridgeNodes ; bn++) 
 			if (bridgeRanks[bn] == myrank) myWeight = int(avgWeight[bn]);
@@ -1028,17 +1030,17 @@ void distributeInfo() {
 		int k=-1;
 		//for (j=0; j<MidplaneSize ; j++) { 
 		for (j=0; j<MidplaneSize*ppn ; j=j+ppn) { 
-#ifdef DEBUG
+//#ifdef DEBUG
 			if (newBridgeNode[j] >= 0) 
 				printf ("%d: checking: %d %d %d %d %d\n", myrank, nodeID, coreID, j, bridgeRanks[newBridgeNode[j]], bridgeNodeAll[j*2+1]);
-#endif
+//#endif
 			//if (bridgeRanks[newBridgeNode[j]] == myrank && bridgeNodeAll[j*2+1]>1) {
 			if (newBridgeNode[j] >= 0 && bridgeRanks[newBridgeNode[j]] == nodeID*ppn && bridgeNodeAll[j*2+1]>1) {
 				k++;
-				shuffledNodes[k] = j+coreID;
-#ifdef DEBUG
+				shuffledNodes[k] = lb + j + coreID;
+//#ifdef DEBUG
 				printf("%d:(%d,%d) k=%d newBridgeNode[%d]=%d bn=%d %d\n", myrank, nodeID, coreID, k, j, newBridgeNode[j], bridgeRanks[newBridgeNode[j]], shuffledNodes[k]); 
-#endif
+//#endif
 			}
 		}
 
