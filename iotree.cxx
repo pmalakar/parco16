@@ -66,6 +66,7 @@ float *avgWeight;			//[numBridgeNodes];
 
 int *shuffledNodes;
 double **shuffledNodesData;
+double *dataPerNode;
 
 queue <Node *> nodeList;
 queue <Node *> *rootNodeList;	//[numBridgeNodes];
@@ -123,9 +124,7 @@ int writeFile(dataBlock *datum, int count, int all) {
 #endif
 
 					if (coalesced == 1) {
-						double *dataPerNode;
 						if (coreID == 0) {
-							dataPerNode = new double[count*ppn];
 							if (dataPerNode == NULL) printf("allocation error at %d\n", myrank);
 						}
 
@@ -142,7 +141,7 @@ printf("%d will gather\n", myrank);
 							if (result != MPI_SUCCESS) 
 								prnerror (result, "coalesced nonBN node MPI_Isend Error:");
 							MPI_Wait (&sendreq, &sendst);
-							free(dataPerNode);
+		//					free(dataPerNode);
 						}
 					}
 					//no coalescing
@@ -186,7 +185,7 @@ printf("%d will gather\n", myrank);
 				MPI_Request req[arrayLength], wrequest[myWeight+1];
 				MPI_Status stat, wstatus[myWeight+1];
 
-				shuffledNodesData = new double *[arrayLength];
+				//shuffledNodesData = new double *[arrayLength];
 				assert(shuffledNodesData);
 
 				if (coalesced == 1) {
@@ -234,8 +233,8 @@ printf("%d will gather\n", myrank);
 			//		assert(shuffledNodes);
 #ifdef DEBUG
 					printf("\n%d: myWeight = %d arrayLength = %d\n\n", myrank, myWeight, arrayLength);
-#endif
 					printf("\n%d: myWeight = %d shuffledNodes[%d] = %d\n\n", myrank, myWeight, i, shuffledNodes[i]);
+#endif
 					MPI_Irecv (shuffledNodesData[i], count*ppn, MPI_DOUBLE, shuffledNodes[i], myrank, MPI_COMM_WORLD, &req[i]);				
 				 }
 
@@ -289,7 +288,8 @@ printf("%d will gather\n", myrank);
 				//free 
 				if ((coalesced == 1 && coreID == 0) || coalesced == 0)
 					for (int i=0; i<arrayLength; i++) free(shuffledNodesData[i]);
-				free(shuffledNodesData);
+				//free(shuffledNodesData);
+				
 			}
 		}
 
@@ -991,6 +991,9 @@ void distributeInfo() {
 
 		MPI_Barrier (COMM_BRIDGE_NODES);	
 
+		
+		shuffledNodesData = new double *[myWeight];
+
 }
 
 void initTree(int n) {
@@ -1158,6 +1161,12 @@ int main (int argc, char **argv) {
 		 * * * * * * * * * * * * Independent MPI-IO to IO nodes from all compute nodes - shared file * * * * * * * * * *
 		 */
 
+
+		if (coalesced == 1 && coreID == 0) {
+			dataPerNode = new double[count*ppn];
+			if (dataPerNode == NULL) printf("allocation error at %d\n", myrank);
+		}
+
 		double tION[2];
 
 		/* set file open mode */
@@ -1248,6 +1257,8 @@ int main (int argc, char **argv) {
 		//* * * * * * * * * * * * * * * * * * * * * * * * * * * End of IO * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 		//bgpmfinalize();
+
+		free(dataPerNode);
 
 		double max[5];
 
