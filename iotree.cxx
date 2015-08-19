@@ -49,6 +49,8 @@ uint8_t **depthInfo; 					//[numBridgeNodes][MidplaneSize];
 int *bridgeRanks; 						//[numBridgeNodes];
 uint8_t bridgeNodeCurrIdx;
 
+int lb, ub;
+
 MPI_Comm MPI_COMM_core, MPI_COMM_NODE;
 MPI_Comm MPI_COMM_MIDPLANE;
 MPI_Comm COMM_BRIDGE_NODES, COMM_BRIDGE_NODES_core;
@@ -588,8 +590,14 @@ void expandNode (Node *currentNodePtr) {
 	for (int j=8; j>=0; j--) {		//start with the lowest differing dimension neighbour to "hope 4" default path
 
 		// check all eligible neighbours
-		int localNodeRank = neighbourRanks[currentNode][j];
-		int localNode = (neighbourRanks[currentNode][j])%(MidplaneSize*ppn);
+		int localNode = neighbourRanks[currentNode][j];
+
+		if (localNode < lb || localNode >= ub) {
+			printf("%d: localNode %d %d %d\n", myrank, localNode, lb, ub);
+		 	continue;
+		}
+
+		int localNode_ = (neighbourRanks[currentNode][j])%(MidplaneSize*ppn);
 //#ifdef DEBUG
 		if (myrank == bridgeRanks[bridgeNodeCurrIdx])
 			printf ("%d: check for %d neighbour %d of %d\n", myrank, localNode, j, currentNode);
@@ -597,15 +605,17 @@ void expandNode (Node *currentNodePtr) {
 
 		if (currentNodePtr != root && isParent(currentNodePtr, localNode) == true) continue;
 
+		assert(visited[localNode]);
+
 		if (visited[localNode] == false) {
 			//check if network path from localNode (which is a neighbour of currentNodePtr) to the BN (rootid) is a path in the tree of children from BN 
-			int success = checkDefaultRoutes(rootid, currentNodePtr, localNodeRank, myrank);
+			int success = checkDefaultRoutes(rootid, currentNodePtr, localNode, myrank);
 //#ifdef DEBUG
-			printf ("%d: success %d for check route from %d (%d)\n", myrank, success, localNode, localNodeRank);
+			printf ("%d: success %d for check route from %d\n", myrank, success, localNode);
 //#endif
 			if (success) {
 
-	printf ("%d: rootid %d currentNode %d localNode %d localNodeRank %d\n", myrank, rootid, currentNode, localNode, localNodeRank);
+	printf ("%d: rootid %d currentNode %d localNode %d\n", myrank, rootid, currentNode, localNode);
 
 				childNum ++;
 				Node *childNodePtr = currentNodePtr->addChild(localNode, rootid);
@@ -619,22 +629,20 @@ void expandNode (Node *currentNodePtr) {
 //#endif
 
 				//resolve distance metric later
-				//if(depthInfo[bridgeNodeCurrIdx][localNode] > currDepth+1) {
-				if(bridgeNodeAll[localNode*2+1] > currDepth+1) {
+				if(bridgeNodeAll[localNode_*2+1] > currDepth+1) {
 					revisit[localNode][0] = 1;// mark - to be visited later
 #ifdef DEBUG
-					printf("%d: %d: can change the depth for %d from %d to %d\n", myrank, bridgeRanks[bridgeNodeCurrIdx], localNode, bridgeNodeAll[localNode*2+1], currDepth);
+					printf("%d: %d: can change the depth for %d from %d to %d\n", myrank, bridgeRanks[bridgeNodeCurrIdx], localNode, bridgeNodeAll[localNode_*2+1], currDepth);
 #endif
-					//printf("%d: %d: can change the depth for %d from %d to %d\n", myrank, bridgeRanks[bridgeNodeCurrIdx], localNode, depthInfo[bridgeNodeCurrIdx][localNode], currDepth);
 				}
 
 #ifdef DEBUG
 				if (myrank == bridgeRanks[bridgeNodeCurrIdx]) {
 					printf("%d: %d %d Tree %d -> %d [label=\"%d\"];\n", \
-					 myrank, bridgeNodeAll[localNode*2+1], bridgeNodeAll[localNode*2], currentNode, localNode, currDepth);
-					if(bridgeNodeAll[localNode*2+1] > currDepth+1)
+					 myrank, bridgeNodeAll[localNode_*2+1], bridgeNodeAll[localNode_*2], currentNode, localNode, currDepth);
+					if(bridgeNodeAll[localNode_*2+1] > currDepth+1)
 					 printf("%d: %d %d ModTree %d -> %d [label=\"%d\"];\n", \ 
-					  myrank, bridgeNodeAll[localNode*2+1], bridgeNodeAll[localNode*2], currentNode, localNode, currDepth);
+					  myrank, bridgeNodeAll[localNode_*2+1], bridgeNodeAll[localNode_*2], currentNode, localNode, currDepth);
 				}
 #endif
 //build map... ??
@@ -642,14 +650,13 @@ void expandNode (Node *currentNodePtr) {
 		}
 	}
 
-	if (numNodes > 0)
+	if (numNodes >= 0)
 		numNodes += childNum;
 
 //#ifdef DEBUG
 	if (myrank == bridgeRanks[bridgeNodeCurrIdx]) {
-		printf("%d: numNodes %d childNum %d\n", myrank, numNodes, childNum);
+		printf("%d: numNodes %d childNum %d BAG %d\n", myrank, numNodes, childNum, BAG);
 		if(!nodeList.empty()) printf("%d: empty queue size %d\n", myrank, nodeList.size());
-		printf ("%d: childNum %d BAG %d numNodes %d\n", myrank, childNum, BAG);
 	}
 //#endif
 
@@ -825,13 +832,14 @@ void formBridgeNodesRoutes () {
 		//	all nodes but the bridge nodes are unvisited
 		
 		//for (i=0; i<MidplaneSize ; i++) 
-		for (i=0; i<MidplaneSize*ppn ; i=i+1) 
+		//for (i=0; i<MidplaneSize*ppn ; i=i+1) 
+		for (i=0; i<commsize ; i=i+1) 
 			  visited[i] = false, processed[i] = false;
 
 		for (int bn=0; bn<numBridgeNodes ; bn++) { 
 		  visited[bridgeRanks[bn]] = true;
-		  //for (i=0; i<MidplaneSize ; i++) {
-		  for (i=0; i<MidplaneSize*ppn ; i=i+1) {
+		  for (i=0; i<commsize ; i++) {
+		  //for (i=0; i<MidplaneSize*ppn ; i=i+1) {
 				revisit[i][0] = 255, revisit[i][1] = 255;
 		  	depthInfo[bn][i] = -1;			
 #ifdef DEBUG
@@ -848,7 +856,7 @@ void formBridgeNodesRoutes () {
 #ifdef DEBUG
 			printf("%d: bridge num %d\n", myrank, bridgeNodeCurrIdx);
 #endif
-			numNodes=-1;
+			numNodes=0;
 
 #ifdef DEBUG
 			printf("%d: building for %d\n", myrank, bridgeRanks[bridgeNodeCurrIdx]);
@@ -1091,10 +1099,28 @@ int main (int argc, char **argv) {
 */
 		double tAStart, tAEnd; 
 
+		lb = floor(myrank/(MidplaneSize*ppn)) * (MidplaneSize*ppn);
+		ub = ceil(myrank/(MidplaneSize*ppn)) * (MidplaneSize*ppn);
+
+		printf("\n%d: lb=%d ub=%d\n", myrank, lb, ub);
+
 		bridgeNodeAll = new int [2*MidplaneSize*ppn];
+		newBridgeNode = new int [MidplaneSize*ppn];
+
+		visited = new bool [commsize];
+		processed = new bool [commsize];
+
+		revisit = new uint8_t *[commsize];
+		for (i=0 ; i<commsize ; i++)
+			revisit[i] = new uint8_t[2];
+
+		depthInfo = new uint8_t *[numBridgeNodes];
+		for (i=0 ; i<numBridgeNodes ; i++)
+			depthInfo[i] = new uint8_t[commsize];
+
+/*
 		visited = new bool [MidplaneSize*ppn];
 		processed = new bool [MidplaneSize*ppn];
-		newBridgeNode = new int [MidplaneSize*ppn];
 
 		revisit = new uint8_t *[MidplaneSize*ppn];
 		for (i=0 ; i<MidplaneSize*ppn ; i++)
@@ -1103,6 +1129,7 @@ int main (int argc, char **argv) {
 		depthInfo = new uint8_t *[numBridgeNodes];
 		for (i=0 ; i<numBridgeNodes ; i++)
 			depthInfo[i] = new uint8_t[MidplaneSize*ppn];
+*/
 
 		bridgeRanks = new int [numBridgeNodes];
 		avgWeight = new float [numBridgeNodes];
