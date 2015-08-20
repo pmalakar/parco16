@@ -73,13 +73,15 @@ queue <Node *> *rootNodeList;	//[numBridgeNodes];
 
 Node **bridgeNodeRootList;
 
-int SKIP = 5;
-int MAXTIMES = 5;
-int MAXTIMESD = 10;
+int SKIP = 15;
+int MAXTIMES = 50;
+int MAXTIMESD = 15;
 
 int coalesced;	//0=false, 1=true
 int blocking;	//0=nonblocking, 1=blocking
 int type;	//0=optimized independent, 1=independent, 2=collective
+
+int count; 
 
 double tstart, tend;
 double Tmax, Tmin, Tmax_test2;
@@ -141,7 +143,6 @@ printf("%d will gather\n", myrank);
 							if (result != MPI_SUCCESS) 
 								prnerror (result, "coalesced nonBN node MPI_Isend Error:");
 							MPI_Wait (&sendreq, &sendst);
-		//					free(dataPerNode);
 						}
 					}
 					//no coalescing
@@ -177,32 +178,34 @@ printf("%d will gather\n", myrank);
 		//If I am a bridge node, receive data from the new senders
 		else if (bridgeNodeInfo[1] == 1) {
 
-				int arrayLength = myWeight;	//*ppn;
+				//int arrayLength = myWeight;	//*ppn;
 #ifdef DEBUG
-			  printf("%d am a BN: myWeight = %d\n", myrank, arrayLength);
+			  printf("%d am a BN: myWeight = %d\n", myrank, myWeight);
 #endif
 
-				MPI_Request req[arrayLength], wrequest[myWeight+1];
+				MPI_Request req[myWeight], wrequest[myWeight+1];
 				MPI_Status stat, wstatus[myWeight+1];
 
-				//shuffledNodesData = new double *[arrayLength];
+				//shuffledNodesData = new double *[myWeight];
 				assert(shuffledNodesData);
 
 				if (coalesced == 1) {
 					if (coreID == 0) { 
 #ifdef DEBUG
-						printf ("%d: about to allocate %d * %d * %d bytes\n", myrank, arrayLength, count, ppn);
 #endif
-						for (int i=0; i<arrayLength; i++) shuffledNodesData[i] = new double[count*ppn];
+				//		for (int i=0; i<myWeight; i++) shuffledNodesData[i] = new double[count*ppn];
+				//		printf ("%d: allocated %d * %d bytes\n", myrank, myWeight, count*ppn);
 					}
 				}
 				else {
 #ifdef DEBUG
 					if (myrank == bridgeRanks[0])
-						printf ("%d: about to allocate %d * %d bytes\n", myrank, arrayLength, count);
+						printf ("%d: about to allocate %d * %d bytes\n", myrank, myWeight, count);
 #endif
-					for (int i=0; i<arrayLength; i++) shuffledNodesData[i] = new double[count];
+//					for (int i=0; i<myWeight; i++) shuffledNodesData[i] = new double[count];
+//					printf ("uncoalesced %d: allocated %d * %d bytes\n", myrank, myWeight, count);
 				}
+
 
 				// Write out my data first, before waiting for senders' data 
 				if (blocking == 1) {
@@ -227,19 +230,19 @@ printf("%d will gather\n", myrank);
 				if (coalesced == 1) {
 					if (coreID == 0) {
  
-				 for (int i=0; i<arrayLength ; i++) { 
-					assert(shuffledNodesData);
-					assert(shuffledNodesData[i]);
-			//		assert(shuffledNodes);
+				 	for (int i=0; i<myWeight ; i++) { 
+						assert(shuffledNodesData);
+						assert(shuffledNodesData[i]);
+						assert(shuffledNodes);
 #ifdef DEBUG
-					printf("\n%d: myWeight = %d arrayLength = %d\n\n", myrank, myWeight, arrayLength);
-					printf("\n%d: myWeight = %d shuffledNodes[%d] = %d\n\n", myrank, myWeight, i, shuffledNodes[i]);
+						printf("\n%d: myWeight = %d shuffledNodes[%d] = %d\n\n", myrank, myWeight, i, shuffledNodes[i]);
 #endif
-					MPI_Irecv (shuffledNodesData[i], count*ppn, MPI_DOUBLE, shuffledNodes[i], myrank, MPI_COMM_WORLD, &req[i]);				
-				 }
+						MPI_Irecv (shuffledNodesData[i], count*ppn, MPI_DOUBLE, shuffledNodes[i], myrank, MPI_COMM_WORLD, &req[i]);				
+				 	}
 
 //#pragma omp parallel for
-				for (int i=0; i<arrayLength ; i++) {
+					for (int i=0; i<myWeight ; i++) {
+
 						MPI_Waitany (myWeight, req, &idx, &stat);
 #ifdef DEBUG
 						printf ("BN %d received data from %d\n", myrank, shuffledNodes[idx]);
@@ -259,15 +262,18 @@ printf("%d will gather\n", myrank);
 				}
 				//non-coalesced
 				else {
-					for (int i=0; i<arrayLength ; i++) 
+					for (int i=0; i<myWeight ; i++) {
+						assert(shuffledNodesData);
+						assert(shuffledNodesData[i]);
+						assert(shuffledNodes);
 						MPI_Irecv (shuffledNodesData[i], count, MPI_DOUBLE, shuffledNodes[i], myrank, MPI_COMM_WORLD, &req[i]); 
+					}
 //#pragma omp parallel for
-					for (int i=0; i<arrayLength ; i++) {
+					for (int i=0; i<myWeight ; i++) {
 						MPI_Waitany (myWeight, req, &idx, &stat);
 #ifdef DEBUG
 						printf ("BN %d received data from %d\n", myrank, shuffledNodes[idx]);
 #endif
-					
 						if (blocking == 1) { 
 							result = MPI_File_write_at (fileHandle, (MPI_Offset)shuffledNodes[idx]*count*sizeof(double), shuffledNodesData[idx], count, MPI_DOUBLE, &status);
 							if (result != MPI_SUCCESS) 
@@ -286,10 +292,11 @@ printf("%d will gather\n", myrank);
 				}
 			
 				//free 
-				if ((coalesced == 1 && coreID == 0) || coalesced == 0)
-					for (int i=0; i<arrayLength; i++) free(shuffledNodesData[i]);
+			//	if ((coalesced == 1 && coreID == 0) || coalesced == 0)
+				//if (coalesced == 0)
+				//if (coalesced == 1 && coreID == 0)
+				//	for (int i=0; i<myWeight; i++) free(shuffledNodesData[i]);
 				//free(shuffledNodesData);
-				
 			}
 		}
 
@@ -798,6 +805,10 @@ void formBridgeNodesRoutes () {
 	//process on Bridge node core 0
 	if (bridgeNodeInfo[1] == 1 && coreID == 0) {
 
+//#ifdef DEBUG
+		printf("%d am the BN on core %d\n", myrank, coreID); 
+//#endif
+
 		MPI_Request requestSend, requestRecv, requestRecvAll;
 		MPI_Status statusSend, statusRecv, statusRecvAll;
 
@@ -989,10 +1000,29 @@ void distributeInfo() {
 		//abort
 		}
 
-		MPI_Barrier (COMM_BRIDGE_NODES);	
-
-		
+		//Allocation	
 		shuffledNodesData = new double *[myWeight];
+/*
+		if (coalesced == 1) {
+				if (coreID == 0) 
+						for (int i=0; i<myWeight; i++) shuffledNodesData[i] = new double[count*ppn];
+		}
+		else 
+					for (int i=0; i<myWeight; i++) shuffledNodesData[i] = new double[count];
+*/
+				if (coalesced == 1) {
+					if (coreID == 0) { 
+						for (int i=0; i<myWeight; i++) shuffledNodesData[i] = new double[count*ppn];
+						printf ("%d: allocated %d * %d bytes\n", myrank, myWeight, count*ppn);
+					}
+				}
+				else
+				{
+					for (int i=0; i<myWeight; i++) shuffledNodesData[i] = new double[count];
+					printf ("uncoalesced %d: allocated %d * %d bytes\n", myrank, myWeight, count);
+				}
+
+		MPI_Barrier (COMM_BRIDGE_NODES);	
 
 }
 
@@ -1008,7 +1038,6 @@ void initTree(int n) {
 int main (int argc, char **argv) {
 
 //		if (argc<5) return 0;
-
 		MPI_Init (&argc, &argv);
 
 		MPI_Comm_rank (MPI_COMM_WORLD, &myrank);
@@ -1019,6 +1048,7 @@ int main (int argc, char **argv) {
 		coalesced = atoi(argv[2]);
 		blocking = atoi(argv[3]);
 		type = atoi(argv[4]);
+		count = fileSize;				//weak scaling
 
 		getPersonality(myrank);
 
@@ -1029,32 +1059,7 @@ int main (int argc, char **argv) {
 #else
 		numBridgeNodes = 32; 	//vesta
 #endif
-		numBridgeNodesAll = numBridgeNodes * numMidplanes;		//cetus/mira 
-
-#ifdef DEBUG
-		printf("\nLogistics: %d %d %d\n", numMidplanes, MidplaneSize, numBridgeNodesAll);
-#endif
-
-		int i, c;
-/*
-		opterr = 0;
-  	while ((c = getopt (argc, argv, "d:")) != -1)
-    		switch (c)
-      		{
-      			case 'd':
-        			//#define DEBUG = 1;
-        			break;
-      			default:
-        			//DEBUG = 0;
-        			break;
-		}
-*/
-		double tAStart, tAEnd; 
-
-		lb = floor(myrank/(MidplaneSize*ppn)) * (MidplaneSize*ppn);
-		ub = lb + (MidplaneSize*ppn);
-
-		//printf("%d: lb=%d ub=%d\n", myrank, lb, ub);
+		//numBridgeNodesAll = numBridgeNodes * numMidplanes;		//cetus/mira 
 
 		bridgeNodeAll = new int [2*MidplaneSize*ppn];
 		newBridgeNode = new int [MidplaneSize*ppn];
@@ -1063,25 +1068,12 @@ int main (int argc, char **argv) {
 		processed = new bool [commsize];
 
 		revisit = new uint8_t *[commsize];
-		for (i=0 ; i<commsize ; i++)
+		for (int i=0 ; i<commsize ; i++)
 			revisit[i] = new uint8_t[2];
 
 		depthInfo = new uint8_t *[numBridgeNodes];
-		for (i=0 ; i<numBridgeNodes ; i++)
+		for (int i=0 ; i<numBridgeNodes ; i++)
 			depthInfo[i] = new uint8_t[commsize];
-
-/*
-		visited = new bool [MidplaneSize*ppn];
-		processed = new bool [MidplaneSize*ppn];
-
-		revisit = new uint8_t *[MidplaneSize*ppn];
-		for (i=0 ; i<MidplaneSize*ppn ; i++)
-			revisit[i] = new uint8_t[2];
-
-		depthInfo = new uint8_t *[numBridgeNodes];
-		for (i=0 ; i<numBridgeNodes ; i++)
-			depthInfo[i] = new uint8_t[MidplaneSize*ppn];
-*/
 
 		bridgeRanks = new int [numBridgeNodes];
 		avgWeight = new float [numBridgeNodes];
@@ -1089,10 +1081,16 @@ int main (int argc, char **argv) {
 		rootNodeList = new queue<Node *> [numBridgeNodes];
 
 		rootps = floor(myrank/(MidplaneSize*ppn)) * (MidplaneSize*ppn);
+		lb = floor(myrank/(MidplaneSize*ppn)) * (MidplaneSize*ppn);
+		ub = lb + (MidplaneSize*ppn);
 
-		//printf("\n%d %d\n", myrank, rootps);
+//#ifdef DEBUG
+		printf("Logistics: %d:%d:%d: %d %d %d\n", myrank, nodeID, coreID, lb, ub, rootps);
+//#endif
 
 		double tStart = MPI_Wtime();	//entire execution
+
+		dataBlock *datum = new dataBlock(count);			//initializes alpha array to random double values
 
 		initNeighbours(commsize);
 		initTree(numBridgeNodes);
@@ -1124,11 +1122,11 @@ int main (int argc, char **argv) {
 		MPI_Gather (bridgeNodeInfo, 2, MPI_INT, bridgeNodeAll, 2, MPI_INT, 0, MPI_COMM_MIDPLANE);
 		ts = MPI_Wtime() - ts;
 
-#ifdef DEBUG
-		printf("%d: mybridgeNodeInfo: %d %d\n", myrank, bridgeNodeInfo[0], bridgeNodeInfo[1]);
+//#ifdef DEBUG
+		if (coreID == 0) printf("%d: mybridgeNodeInfo: %d %d\n", myrank, bridgeNodeInfo[0], bridgeNodeInfo[1]);
 		if (myrank == rootps)
 			printf("%d: bridgeNodeInfo %d %d %d %d %lf\n", myrank, bridgeNodeAll[2], bridgeNodeAll[3], bridgeNodeAll[6], bridgeNodeAll[7], ts);
-#endif
+//#endif
 
 		double tOStart = MPI_Wtime();
 		if (coreID == 0) formBridgeNodesRoutes ();
@@ -1136,7 +1134,6 @@ int main (int argc, char **argv) {
 		MPI_Bcast(newBridgeNode, MidplaneSize*ppn, MPI_INT, 0, MPI_COMM_MIDPLANE);	
 		MPI_Bcast(bridgeRanks, numBridgeNodes, MPI_INT, 0, MPI_COMM_MIDPLANE);	
 
-		//if (bridgeNodeInfo[1] == 1 && coalesced == 0) distributeInfo();
 		if (bridgeNodeInfo[1] == 1) distributeInfo();
 
 		double tOEnd = MPI_Wtime();
@@ -1147,9 +1144,6 @@ int main (int argc, char **argv) {
 #endif
 
 		MPI_Barrier (MPI_COMM_WORLD);
-
-		int count = fileSize;				//weak scaling
-		dataBlock *datum = new dataBlock(count);			//initializes alpha array to random double values
 
 		//bgpminit();
 
@@ -1167,6 +1161,7 @@ int main (int argc, char **argv) {
 			if (dataPerNode == NULL) printf("allocation error at %d\n", myrank);
 		}
 
+
 		double tION[2];
 
 		/* set file open mode */
@@ -1174,6 +1169,9 @@ int main (int argc, char **argv) {
 
 		/* allocate buffer */
 		datum->allocElement (1);
+
+
+		MPI_Barrier (MPI_COMM_WORLD);
 
 
 		if (type == 1) {
@@ -1259,6 +1257,12 @@ int main (int argc, char **argv) {
 		//bgpmfinalize();
 
 		free(dataPerNode);
+	
+		if (bridgeNodeInfo[1] == 1) {
+		if ((coalesced == 1 && coreID == 0) || coalesced == 0)
+			for (int i=0; i<myWeight; i++) free(shuffledNodesData[i]);
+		 free(shuffledNodesData);
+		}
 
 		double max[5];
 
@@ -1269,7 +1273,7 @@ int main (int argc, char **argv) {
 		MPI_Finalize ();
 
 		if (myrank == 0) {
-			printf ("Times: %d: %d: %d: %d | %d %d | %6.2f | %lf %lf | %lf\n", type, blocking, coalesced, commsize, ppn, omp_get_num_threads(), 8.0*fileSize/1024.0, max[0], max[1], max[2]);
+			printf ("Times: %d: %d: %d: %d | %d %d | %6.2f | %4.2lf %4.2lf | %4.2lf\n", type, blocking, coalesced, commsize, ppn, omp_get_num_threads(), 8.0*fileSize/1024.0, max[0], max[1], max[2]);
 		}
 
     //PrintCounts("NW", hNWSet, myrank);
