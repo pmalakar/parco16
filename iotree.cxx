@@ -760,7 +760,8 @@ void formBridgeNodesRoutes () {
 //#endif
 		tStart = MPI_Wtime();
 		for (int iter = 0; iter < numBridgeNodes ; iter ++) {
-			result = MPI_Irecv (&bridgeRanks[iter], 1, MPI_INT, MPI_ANY_SOURCE, 100, MPI_COMM_WORLD, &request[iter]);
+			//result = MPI_Irecv (&bridgeRanks[iter], 1, MPI_INT, MPI_ANY_SOURCE, 100, MPI_COMM_WORLD, &request[iter]);
+			result = MPI_Irecv (&bridgeRanks[iter], 1, MPI_INT, MPI_ANY_SOURCE, rootps, MPI_COMM_WORLD, &request[iter]);//to contain messages within midplanes
 			if (result != MPI_SUCCESS) 
 				prnerror (result, "MPI_Irecv Error: ");
 		}
@@ -814,7 +815,8 @@ void formBridgeNodesRoutes () {
 
 		tStart = MPI_Wtime();
 
-		result = MPI_Isend (&myrank, 1, MPI_INT, rootps, 100, MPI_COMM_WORLD, &requestSend);
+		//result = MPI_Isend (&myrank, 1, MPI_INT, rootps, 100, MPI_COMM_WORLD, &requestSend);
+		result = MPI_Isend (&myrank, 1, MPI_INT, rootps, rootps, MPI_COMM_WORLD, &requestSend);		//to contain messages within midplanes
 		if (result != MPI_SUCCESS) 
 			prnerror (result, "MPI_Isend Error: ");
 
@@ -1013,13 +1015,17 @@ void distributeInfo() {
 				if (coalesced == 1) {
 					if (coreID == 0) { 
 						for (int i=0; i<myWeight; i++) shuffledNodesData[i] = new double[count*ppn];
+#ifdef DEBUG
 						printf ("%d: allocated %d * %d bytes\n", myrank, myWeight, count*ppn);
+#endif
 					}
 				}
 				else
 				{
 					for (int i=0; i<myWeight; i++) shuffledNodesData[i] = new double[count];
+#ifdef DEBUG
 					printf ("uncoalesced %d: allocated %d * %d bytes\n", myrank, myWeight, count);
+#endif
 				}
 
 		MPI_Barrier (COMM_BRIDGE_NODES);	
@@ -1085,7 +1091,7 @@ int main (int argc, char **argv) {
 		ub = lb + (MidplaneSize*ppn);
 
 //#ifdef DEBUG
-		printf("Logistics: %d:%d:%d: %d %d %d\n", myrank, nodeID, coreID, lb, ub, rootps);
+		if (coreID == 0) printf("Logistics: %d:%d:%d: %d %d %d\n", myrank, nodeID, coreID, lb, ub, rootps);
 //#endif
 
 		double tStart = MPI_Wtime();	//entire execution
@@ -1122,11 +1128,11 @@ int main (int argc, char **argv) {
 		MPI_Gather (bridgeNodeInfo, 2, MPI_INT, bridgeNodeAll, 2, MPI_INT, 0, MPI_COMM_MIDPLANE);
 		ts = MPI_Wtime() - ts;
 
-//#ifdef DEBUG
+#ifdef DEBUG
 		if (coreID == 0) printf("%d: mybridgeNodeInfo: %d %d\n", myrank, bridgeNodeInfo[0], bridgeNodeInfo[1]);
 		if (myrank == rootps)
 			printf("%d: bridgeNodeInfo %d %d %d %d %lf\n", myrank, bridgeNodeAll[2], bridgeNodeAll[3], bridgeNodeAll[6], bridgeNodeAll[7], ts);
-//#endif
+#endif
 
 		double tOStart = MPI_Wtime();
 		if (coreID == 0) formBridgeNodesRoutes ();
