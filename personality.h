@@ -11,7 +11,7 @@
 /*
  * Number of midplanes : Number of processes / MidplaneSize
  */
-extern int numMidplanes;
+extern int numMidplanes, midplane;
 
 /* 
  * Structure containing BGQ parameters 
