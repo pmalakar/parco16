@@ -25,7 +25,7 @@ LIBMPITRACE =-L/soft/perftools/hpctw/lib -lmpitrace
 ifdef mpi3
 LIBS += $(LIBUTILS) $(LIBBGPM) #$(LIBMPITRACE)
 else
-LIBS += $(LIBUTILS) $(LIBBGPM) #$(LIBMPITRACE)
+LIBS += $(LIBUTILS) $(LIBBGPM) $(LIBMPITRACE)
 endif
 INC += -I/projects/Performance/preeti/utils	
 
@@ -39,7 +39,7 @@ OBJS = 	$(SRCS:.cxx=.o)
 ifdef mpi3
 TARGET = iotree.mpi3.test
 else
-TARGET = iotreemod
+TARGET = iotreebgpm
 endif
 
 all:    $(TARGET)

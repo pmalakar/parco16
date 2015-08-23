@@ -8,9 +8,11 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <assert.h>
 #include <mpi.h>
 #include <mpix.h>
+#include <spi/include/kernel/memory.h>
 
 #include "personality.h"
 #include "route.h"
@@ -56,6 +58,10 @@ int bridgeNodeInfo[2];
  */
 int *routingOrder;
 
+/*
+ * 	Maximum heap available per rank 
+ */
+uint64_t heapAvail;
 
 inline int min (int x, int y) {
   return x<y? x: y;
@@ -75,6 +81,8 @@ void initSystemParameters(int myrank) {
 	ppn = hw.ppn;
   coreID = hw.coreID;	
   nodeID = myrank/ppn;
+
+	Kernel_GetMemorySize(KERNEL_MEMSIZE_HEAPAVAIL, &heapAvail); 
 
 	routingOrder = new int[MPIX_TORUS_MAX_DIMS];
 	getRoutingOrder(routingOrder);

@@ -1,6 +1,8 @@
 #ifndef __personality__
 #define __personality__
 
+#include <stdint.h>
+
 //Variables
 /* 
  * Size of midplane on BGQ
@@ -44,6 +46,10 @@ extern int bridgeNodeInfo[2];
  */
 extern int *routingOrder;
 
+/*
+ * 	Maximum heap available per rank 
+ */
+extern uint64_t heapAvail;
 
 //Functions
 void getPersonality(int);
