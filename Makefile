@@ -15,7 +15,7 @@ CFLAGS=-g #-S #-O3
 ifdef mpi3
 DEFINES += -DBGQ -DCETUS -DMPI3 #-DDEBUG
 else
-DEFINES += -DBGQ -DCETUS #-DDEBUG
+DEFINES += -DBGQ -DCETUS #-DSTATS #-DDEBUG
 endif
 
 LIBHPM = -L/soft/perftools/hpctw/lib -lmpihpm 
@@ -25,7 +25,7 @@ LIBMPITRACE =-L/soft/perftools/hpctw/lib -lmpitrace
 ifdef mpi3
 LIBS += $(LIBUTILS) $(LIBBGPM) #$(LIBMPITRACE)
 else
-LIBS += $(LIBUTILS) $(LIBBGPM) $(LIBMPITRACE)
+LIBS += $(LIBUTILS) $(LIBBGPM) #$(LIBMPITRACE)
 endif
 INC += -I/projects/Performance/preeti/utils	
 
@@ -39,7 +39,9 @@ OBJS = 	$(SRCS:.cxx=.o)
 ifdef mpi3
 TARGET = iotree.mpi3.test
 else
-TARGET = iotreebgpm
+TARGET = iotree 
+#TARGET = iotreeallnw #mu
+#TARGET = iotreemod
 endif
 
 all:    $(TARGET)
