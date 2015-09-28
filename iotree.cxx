@@ -33,7 +33,9 @@
 
 ///projects/Performance/preeti/utils
 #include "mem.h"
+#ifdef STATS
 #include "hwcnt.h"
+#endif
 
 int rootps;
 int numBridgeNodes;
@@ -1190,12 +1192,20 @@ int main (int argc, char **argv) {
 
 #ifdef DEBUG
 		if (coreID == 0) printf("%d: %d MyNewBN %d %d\n", myrank, ppn, newBridgeNode[myrank], bridgeRanks[newBridgeNode[myrank]]);
-		//printf("%d: overhead %6.3f\n", myrank, tOEnd-tOStart);
 #endif
 
 		MPI_Barrier (MPI_COMM_WORLD);
 
-		bgpminit();
+		double maxOverhead;	
+		double tOverhead = tOEnd - tOStart ;
+		MPI_Reduce(&tOverhead, &maxOverhead, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+		if (myrank = 0 || myrank == 100) 
+			printf("%d: overhead %lf %6.3lf %6.3lf\n", myrank, ts, tOverhead, maxOverhead);
+
+#ifdef STATS
+		//bgpminit(0,1);
+		bgpminit(1,0);
+#endif
 
 		//Testing BGQ compute nodes to IO nodes performance
 		//Write to /dev/null
@@ -1221,7 +1231,7 @@ int main (int argc, char **argv) {
 		datum->allocElement (1);
 
 		MPI_Barrier (MPI_COMM_WORLD);
-
+/*
 		if (type == 1) {
 
 		MPI_File_open (MPI_COMM_WORLD, fileNameION, mode, MPI_INFO_NULL, &fileHandle);
@@ -1249,6 +1259,18 @@ int main (int argc, char **argv) {
 		MPI_File_close (&fileHandle);
 
 		}
+
+*/
+
+		MPI_File_open (MPI_COMM_WORLD, fileNameION, mode, MPI_INFO_NULL, &fileHandle);
+		for (int i=1; i<=SKIP; i++)
+			writeFile(datum, count, type);
+		tIOStart = MPI_Wtime();
+		for (int i=1; i<=MAXTIMES; i++)
+			writeFile(datum, count, type);
+		tIOEnd = MPI_Wtime();
+		tION[0] = (tIOEnd - tIOStart)/MAXTIMES;
+		MPI_File_close (&fileHandle);
 
 		/*
 		 * * * * * * * * * * * * * * * * * * * * * Independent MPI-IO to file system from all compute nodes - shared file * * * * * * * * * * * * * * * * * *
@@ -1302,7 +1324,10 @@ int main (int argc, char **argv) {
 
 		//* * * * * * * * * * * * * * * * * * * * * * * * * * * End of IO * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
-		bgpmfinalize();
+#ifdef STATS
+		//bgpmfinalize(0,1);
+		bgpmfinalize(1,0);
+#endif
 
 		free(dataPerNode);
 	
@@ -1328,8 +1353,10 @@ int main (int argc, char **argv) {
 			printf ("Times: %d: %d: %d: %d | %d %d | %6.2f | %4.2lf %4.2lf | %4.2lf\n", type, blocking, coalesced, commsize, ppn, omp_get_num_threads(), 8.0*fileSize/1024.0, max[0], max[1], max[2]);
 		}
 
+#ifdef STATS
     PrintCounts("NW", hNWSet, myrank);
-    PrintCounts("IO", hIOSet, myrank);
+    //PrintCounts("IO", hIOSet, myrank);
+#endif
 
 		return 0;
 
