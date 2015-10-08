@@ -10,7 +10,7 @@ CXX=mpixlcxx
 endif
 
 #common
-CFLAGS=-g #-S #-O3
+CFLAGS=-O3 -g #-S #-O3
 
 ifdef mpi3
 DEFINES += -DBGQ -DCETUS -DMPI3 #-DDEBUG
