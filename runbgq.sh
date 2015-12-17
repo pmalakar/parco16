@@ -14,16 +14,16 @@ for iter in 1 # 2
 do
 for THRD in 1 #2 4 8 16 
 do
-for ppn in 8 # #4 #2 1
+for ppn in 16 8 #4 #2 1
 do
-for MSG in 16 #32 64 128 #256 #1024 # 8 16 32 64 # 128 256 512 #384 512 768 1024 2048 4096 8192
+for MSG in 16 32 64 128 #256 #1024 # 8 16 32 64 # 128 256 512 #384 512 768 1024 2048 4096 8192
 do 
  for coalesced in 0 1 
  do
  for blocking in 0 #1
  do
  rm -f dummy*
- for type in 2 1 0
+ for type in 0 1 #2 
  do
 	if [ $type -gt 0 ] && [ $coalesced -eq 1 ] 
 	then
