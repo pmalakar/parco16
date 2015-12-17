@@ -2,12 +2,12 @@ import os
 import time
 from subprocess import *
 
-nodes = [512, 1024] #, 1024, 2048, 4096, 8192, 16384, 32768]
+nodes = [512] #, 1024, 2048, 4096, 8192, 16384, 32768]
 
 def runcmd (node):
 
 	script = './runbgq.sh ' + str(node) 
-	cmd = 'qsub -A Performance -t 01:00:00 -n '+str(node)+' --mode script '+script
+	cmd = 'qsub -A Performance -t 00:20:00 -n '+str(node)+' --mode script '+script
 	print 'Executing ' + cmd
 	jobid = Popen(cmd, shell=True, stdout=PIPE).communicate()[0]
 	print 'Jobid : ' + jobid
@@ -33,4 +33,21 @@ for iter in range (1, 2):
 		Popen(cmd, shell=True, stdout=PIPE).communicate()[0]
 		cmd = 'mv ' + jobid.strip() + '.cobaltlog ' + filename + '.cobaltlog'
 		Popen(cmd, shell=True, stdout=PIPE).communicate()[0]
+
+		cmd = 'ls -tr it_N*'
+		output_files = Popen(cmd, shell=True, stdout=PIPE).communicate()[0]
+		opfname = output_files.split()
+		print opfname
+
+		cmd = 'ls -tr mpi_profile*.0'
+		mpifnames = Popen(cmd, shell=True, stdout=PIPE).communicate()[0]
+		mpifname = mpifnames.split()
+		print mpifname
+
+		for i in range(1, len(output_files)):
+			print i
+			cmd = 'mv ' + mpifname[i].strip() + ' ' + opfname[i].strip() + '-' + mpifname[i].strip()
+			Popen(cmd, shell=True, stdout=PIPE).communicate()[0]
+			cmd = 'mv ' + opfname[i].strip() + ' o-' + opfname[i].strip()
+			Popen(cmd, shell=True, stdout=PIPE).communicate()[0]
 
