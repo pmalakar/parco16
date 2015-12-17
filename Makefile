@@ -13,9 +13,15 @@ endif
 CFLAGS=-O3 -g #-S #-O3
 
 ifdef mpi3
-DEFINES += -DBGQ -DCETUS -DMPI3 #-DDEBUG
+DEFINES += -DBGQ -DMPI3 #-DDEBUG
 else
-DEFINES += -DBGQ -DCETUS #-DSTATS #-DDEBUG
+DEFINES += -DBGQ #-DSTATS #-DDEBUG
+endif
+
+ifdef VESTA
+DEFINES += -DVESTA
+else
+DEFINES += -DCETUS
 endif
 
 LIBHPM = -L/soft/perftools/hpctw/lib -lmpihpm 
