@@ -14,9 +14,9 @@ for iter in 1 # 2
 do
 for THRD in 1 #2 4 8 16 
 do
-for ppn in 16 8 4 #2 1
+for ppn in 1 #16 #8 4 2 1
 do
-for MSG in 16 32 64 128 256 512 #1024 # 8 16 32 64 # 128 256 512 #384 512 768 1024 2048 4096 8192
+for MSG in 1024 #1024 # 8 16 32 64 # 128 256 512 #384 512 768 1024 2048 4096 8192
 do 
  for coalesced in 0 1 
  do
@@ -30,7 +30,7 @@ do
 			continue;
 	fi
 	RANKS=`echo "$NODES*$ppn"|bc`
-	OUTPUT=${PROG}_N${NODES}_R${ppn}_${MSG}_${coalesced}_${blocking}_${type}
+	OUTPUT=it_N${NODES}_R${ppn}_${MSG}_${coalesced}_${blocking}_${type}
 	rm -f ${OUTPUT}.cobaltlog ${OUTPUT}.output ${OUTPUT}.error
 	echo 
 	echo "* * * * *"
