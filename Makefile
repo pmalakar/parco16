@@ -31,7 +31,7 @@ LIBMPITRACE =-L/soft/perftools/hpctw/lib -lmpitrace
 ifdef mpi3
 LIBS += $(LIBUTILS) $(LIBBGPM) #$(LIBMPITRACE)
 else
-LIBS += $(LIBUTILS) $(LIBBGPM) #$(LIBMPITRACE)
+LIBS += $(LIBUTILS) $(LIBMPITRACE)
 endif
 INC += -I/projects/Performance/preeti/utils	
 
