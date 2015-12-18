@@ -44,7 +44,7 @@ for iter in range (1, 2):
 		mpifname = mpifnames.split()
 		print mpifname
 
-		for i in range(1, len(output_files)):
+		for i in range(len(opfname)):
 			print i
 			cmd = 'mv ' + mpifname[i].strip() + ' ' + opfname[i].strip() + '-' + mpifname[i].strip()
 			Popen(cmd, shell=True, stdout=PIPE).communicate()[0]
