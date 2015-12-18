@@ -931,7 +931,7 @@ void formBridgeNodesRoutes () {
 
 //#ifdef DEBUG
 		for (j=0; j<midplane; j++) 
-			if (newBridgeNode[j] >= 0)
+			if (newBridgeNode[j] >= 0 && myrank == bridgeRanks[newBridgeNode[j]])
 				printf("%d: %d (%d) is the new BN for %d at distance %d\n", myrank, bridgeRanks[newBridgeNode[j]], newBridgeNode[j], j, bridgeNodeAll[j*2+1]);
 //#endif
 
