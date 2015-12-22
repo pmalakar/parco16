@@ -160,8 +160,8 @@ printf("%d will gather\n", myrank);
 
 			//If I have not been assigned a new bridge node, write 
 		  	else {
+				if (coreID == 0) printf("%d will write %d doubles\n", myrank, count);
 #ifdef DEBUG
-				printf("%d will write %d doubles\n", myrank, count);
 #endif
 				if (blocking == 1) { 
 					result = MPI_File_write_at (fileHandle, (MPI_Offset)myrank*count*sizeof(double), datum->getAlphaBuffer(), count, MPI_DOUBLE, &status);
@@ -655,9 +655,9 @@ void expandNode (Node *currentNodePtr) {
 				//resolve distance metric later
 				if(bridgeNodeAll[localNode_*2+1] > currDepth+1) {
 					revisit[localNode][0] = 1;// mark - to be visited later
-#ifdef DEBUG
+//#ifdef DEBUG
 					printf("%d: %d: can change the depth for %d from %d to %d\n", myrank, bridgeRanks[bridgeNodeCurrIdx], localNode, bridgeNodeAll[localNode_*2+1], currDepth);
-#endif
+//#endif
 				}
 
 #ifdef DEBUG
@@ -1156,11 +1156,12 @@ int main (int argc, char **argv) {
 		MPI_Gather (bridgeNodeInfo, 2, MPI_INT, bridgeNodeAll, 2, MPI_INT, 0, MPI_COMM_MIDPLANE);
 		ts = MPI_Wtime() - ts;
 
-#ifdef DEBUG
 		if (coreID == 0) printf("%d: mybridgeNodeInfo: %d %d\n", myrank, bridgeNodeInfo[0], bridgeNodeInfo[1]);
+#ifdef DEBUG
 		if (myrank == rootps)
 			printf("%d: bridgeNodeInfo %d %d %d %d %lf\n", myrank, bridgeNodeAll[2], bridgeNodeAll[3], bridgeNodeAll[6], bridgeNodeAll[7], ts);
 #endif
+		if (myrank == rootps) printf("%d: gather time %lf\n", nodeID, ts);
 
 #ifdef DEBUG
 		if (myrank == 0 || myrank == 1) getMemStats(myrank, 1);
@@ -1169,17 +1170,21 @@ int main (int argc, char **argv) {
 		double tOStart = MPI_Wtime();
 
 		Kernel_GetMemorySize(KERNEL_MEMSIZE_HEAPAVAIL, &heapAvail); 
-		MPI_Reduce(&heapAvail, &memAvail, 1, MPI_UINT64_T, MPI_MIN, 0, MPI_COMM_WORLD);
-		MPI_Bcast(&memAvail, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);	
+		//MPI_Reduce(&heapAvail, &memAvail, 1, MPI_UINT64_T, MPI_MIN, 0, MPI_COMM_WORLD);
+		//no need of global reduction
+		//MPI_Reduce(&heapAvail, &memAvail, 1, MPI_UINT64_T, MPI_MIN, 0, COMM_BRIDGE_NODES);
+		//MPI_Bcast(&memAvail, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);	
+		MPI_Reduce(&heapAvail, &memAvail, 1, MPI_UINT64_T, MPI_MIN, 0, MPI_COMM_NODE);
+		MPI_Bcast(&memAvail, 1, MPI_UINT64_T, 0, MPI_COMM_NODE);	
 
 		if (coalesced == 1)
 			maxWeight = memAvail/(2 * count * ppn * sizeof(double));
 		else
 			maxWeight = 1000;	//high
 
-#ifdef DEBUG
-		if (nodeID < 2) printf("maxWeight = %d heapAvail = %d memAvail = %d\n", maxWeight, heapAvail, memAvail);
-#endif
+//#ifdef DEBUG
+		if (nodeID < 60 && coreID < 2) printf("%d maxWeight = %d heapAvail = %d memAvail = %d\n", myrank, maxWeight, heapAvail, memAvail);
+//#endif
 
 		if (coreID == 0) formBridgeNodesRoutes ();
 
@@ -1190,10 +1195,10 @@ int main (int argc, char **argv) {
 
 		double tOEnd = MPI_Wtime();
 
-#ifdef DEBUG
+//#ifdef DEBUG
 		if (coreID == 0) printf("%d: %d MyNewBN %d %d\n", myrank, ppn, newBridgeNode[myrank], bridgeRanks[newBridgeNode[myrank]]);
-		//printf("%d: overhead %6.3f\n", myrank, tOEnd-tOStart);
-#endif
+		printf("%d: overhead %6.3f\n", myrank, tOEnd-tOStart);
+//#endif
 
 		MPI_Barrier (MPI_COMM_WORLD);
 
