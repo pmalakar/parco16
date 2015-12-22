@@ -175,7 +175,7 @@ printf("%d will gather\n", myrank);
 				
 				MPI_Get_elements( &status, MPI_CHAR, &nbytes );
 				totalBytes += nbytes;
-//			  	printf("%d wrote\n", myrank);
+			  	printf("%d wrote directly, BN was %d at dist %d\n", myrank, bridgeNodeInfo[0], bridgeNodeInfo[1]);
 		  	}
 		}
 		//If I am a bridge node, receive data from the new senders
@@ -809,9 +809,9 @@ void formBridgeNodesRoutes () {
 	//process on Bridge node core 0
 	if (bridgeNodeInfo[1] == 1 && coreID == 0) {
 
-#ifdef DEBUG
+//#ifdef DEBUG
 		printf("%d am the BN on core %d\n", myrank, coreID); 
-#endif
+//#endif
 
 		MPI_Request requestSend, requestRecv, requestRecvAll;
 		MPI_Status statusSend, statusRecv, statusRecvAll;
@@ -929,11 +929,11 @@ void formBridgeNodesRoutes () {
 			}
 		}
 
-#ifdef DEBUG
+//#ifdef DEBUG
 		for (j=0; j<midplane; j++) 
-			if (newBridgeNode[j] >= 0)
-				printf("%d: %d (%d) is the new BN for %d\n", myrank, bridgeRanks[newBridgeNode[j]], newBridgeNode[j], j);
-#endif
+			if (newBridgeNode[j] >= 0 && myrank == bridgeRanks[newBridgeNode[j]])
+				printf("%d: %d (%d) is the new BN for %d at distance %d\n", myrank, bridgeRanks[newBridgeNode[j]], newBridgeNode[j], j, bridgeNodeAll[j*2+1]);
+//#endif
 
 		for (bn=0; bn<numBridgeNodes ; bn++) 
 			if (bridgeRanks[bn] == myrank) myWeight = int(avgWeight[bn]);
