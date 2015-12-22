@@ -175,7 +175,7 @@ printf("%d will gather\n", myrank);
 				
 				MPI_Get_elements( &status, MPI_CHAR, &nbytes );
 				totalBytes += nbytes;
-//			  	printf("%d wrote\n", myrank);
+			  	printf("%d wrote directly, BN was %d at dist %d\n", myrank, bridgeNodeInfo[0], bridgeNodeInfo[1]);
 		  	}
 		}
 		//If I am a bridge node, receive data from the new senders
