@@ -160,8 +160,8 @@ printf("%d will gather\n", myrank);
 
 			//If I have not been assigned a new bridge node, write 
 		  	else {
-				if (coreID == 0) printf("%d will write %d doubles\n", myrank, count);
 #ifdef DEBUG
+				if (coreID == 0) printf("%d will write %d doubles\n", myrank, count);
 #endif
 				if (blocking == 1) { 
 					result = MPI_File_write_at (fileHandle, (MPI_Offset)myrank*count*sizeof(double), datum->getAlphaBuffer(), count, MPI_DOUBLE, &status);
@@ -175,7 +175,9 @@ printf("%d will gather\n", myrank);
 				
 				MPI_Get_elements( &status, MPI_CHAR, &nbytes );
 				totalBytes += nbytes;
+#ifdef DEBUG
 			  	printf("%d wrote directly, BN was %d at dist %d\n", myrank, bridgeNodeInfo[0], bridgeNodeInfo[1]);
+#endif
 		  	}
 		}
 		//If I am a bridge node, receive data from the new senders
@@ -208,7 +210,6 @@ printf("%d will gather\n", myrank);
 //					for (int i=0; i<myWeight; i++) shuffledNodesData[i] = new double[count];
 //					printf ("uncoalesced %d: allocated %d * %d bytes\n", myrank, myWeight, count);
 				}
-
 
 				// Write out my data first, before waiting for senders' data 
 				if (blocking == 1) {
@@ -546,13 +547,15 @@ void traverse (int index, int level) {
 						continue;
 				 	}
 					//TODO check revisit is true or not
+#ifdef DEBUG
 					printf ("%d: was this node %d marked %d\n", myrank, child, revisit[child][0]);
+#endif
 					//if (revisit[child][0] == 1)	
 				 	if (depthInfo[bn][child] < newDepth && avgWeight[bn] < maxWeight-1) {//TODO fixme : based on mem
 						newBridgeNode[childIdx] = bn;
 					 	newDepth = depthInfo[bn][child];
-						printf("%d: May assign %d to %d (%d) current avgWeight[%d]=%4.2f\n", myrank, child, bridgeRanks[bn], newDepth, bn, avgWeight[bn]);
 #ifdef DEBUG
+						printf("%d: May assign %d to %d (%d) current avgWeight[%d]=%4.2f\n", myrank, child, bridgeRanks[bn], newDepth, bn, avgWeight[bn]);
 #endif
 				 	}
 				}
@@ -564,8 +567,9 @@ void traverse (int index, int level) {
 					currentAvg = currentSum/numBridgeNodes;
 
 					processed[child] = true;
-					printf("%d: Processed %d cSum %4.2lf cAvg %4.2f wt[ %d ](%d) = %4.2f\n", myrank, child, currentSum, currentAvg, bridgeRanks[newBridgeNode[childIdx]], newBridgeNode[childIdx], avgWeight[newBridgeNode[childIdx]]);
+
 #ifdef DEBUG
+					printf("%d: Processed %d cSum %4.2lf cAvg %4.2f wt[ %d ](%d) = %4.2f\n", myrank, child, currentSum, currentAvg, bridgeRanks[newBridgeNode[childIdx]], newBridgeNode[childIdx], avgWeight[newBridgeNode[childIdx]]);
 #endif
 				}
 				else {
@@ -1159,12 +1163,12 @@ int main (int argc, char **argv) {
 		MPI_Gather (bridgeNodeInfo, 2, MPI_INT, bridgeNodeAll, 2, MPI_INT, 0, MPI_COMM_MIDPLANE);
 		ts = MPI_Wtime() - ts;
 
-		if (coreID == 0) printf("%d: mybridgeNodeInfo: %d %d\n", myrank, bridgeNodeInfo[0], bridgeNodeInfo[1]);
 #ifdef DEBUG
+		if (coreID == 0) printf("%d: mybridgeNodeInfo: %d %d\n", myrank, bridgeNodeInfo[0], bridgeNodeInfo[1]);
 		if (myrank == rootps)
 			printf("%d: bridgeNodeInfo %d %d %d %d %lf\n", myrank, bridgeNodeAll[2], bridgeNodeAll[3], bridgeNodeAll[6], bridgeNodeAll[7], ts);
-#endif
 		if (myrank == rootps) printf("%d: gather time %lf\n", nodeID, ts);
+#endif
 
 #ifdef DEBUG
 		if (myrank == 0 || myrank == 1) getMemStats(myrank, 1);
