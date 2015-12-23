@@ -133,12 +133,12 @@ int writeFile(dataBlock *datum, int count, int all) {
 						if (coreID == 0) 
 							if (dataPerNode == NULL) printf("allocation error at %d\n", myrank);
 
-						//result = MPI_Gather (datum->getAlphaBuffer(), count, MPI_DOUBLE, dataPerNode, count, MPI_DOUBLE, 0, MPI_COMM_NODE);
-						//if (result != MPI_SUCCESS) 
-						//		prnerror (result, "coalesced nonBN node MPI_Gather error:");
+						result = MPI_Gather (datum->getAlphaBuffer(), count, MPI_DOUBLE, dataPerNode, count, MPI_DOUBLE, 0, MPI_COMM_NODE);
+						if (result != MPI_SUCCESS) 
+								prnerror (result, "coalesced nonBN node MPI_Gather error:");
 
 /* replacing gather by p2p */
-
+/*
 						if (coreID > 0)
 							result = MPI_Isend (datum->getAlphaBuffer(), count, MPI_DOUBLE, nodeID, myrank, MPI_COMM_NODE, &nodesendreq);	
 
@@ -150,7 +150,7 @@ int writeFile(dataBlock *datum, int count, int all) {
 								MPI_Irecv (dataPerNode+count*i, count, MPI_DOUBLE, nodeID+i, nodeID+i, MPI_COMM_NODE, &noderecvreq[i]);
 							MPI_Waitall(ppn-1, noderecvreq, noderecvst);
 						}						
-
+*/
 /* end - replacing gather by p2p */
 
 						//only core 0 sends
