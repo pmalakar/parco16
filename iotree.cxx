@@ -532,7 +532,7 @@ void traverse (int index, int level) {
 				printf("%d process child %d %d\n", myrank, child, childIdx);
 #endif
 			 	newBridgeNode[childIdx] = -1;//index;
-				newDepth = 254; //depth;
+				newDepth = bridgeNodeAll[child*2+1]; //254; //depth;
 
 				for (bn=0; bn<numBridgeNodes ; bn++) {
 				
@@ -545,11 +545,14 @@ void traverse (int index, int level) {
 #endif
 						continue;
 				 	}
+					//TODO check revisit is true or not
+					printf ("%d: was this node %d marked %d\n", myrank, child, revisit[child][0]);
+					//if (revisit[child][0] == 1)	
 				 	if (depthInfo[bn][child] < newDepth && avgWeight[bn] < maxWeight-1) {//TODO fixme : based on mem
 						newBridgeNode[childIdx] = bn;
 					 	newDepth = depthInfo[bn][child];
-#ifdef DEBUG
 						printf("%d: May assign %d to %d (%d) current avgWeight[%d]=%4.2f\n", myrank, child, bridgeRanks[bn], newDepth, bn, avgWeight[bn]);
+#ifdef DEBUG
 #endif
 				 	}
 				}
@@ -561,8 +564,8 @@ void traverse (int index, int level) {
 					currentAvg = currentSum/numBridgeNodes;
 
 					processed[child] = true;
-#ifdef DEBUG
 					printf("%d: Processed %d cSum %4.2lf cAvg %4.2f wt[ %d ](%d) = %4.2f\n", myrank, child, currentSum, currentAvg, bridgeRanks[newBridgeNode[childIdx]], newBridgeNode[childIdx], avgWeight[newBridgeNode[childIdx]]);
+#ifdef DEBUG
 #endif
 				}
 				else {
@@ -649,15 +652,15 @@ void expandNode (Node *currentNodePtr) {
 #ifdef DEBUG
 				if (myrank == bridgeRanks[bridgeNodeCurrIdx]) {
 					printf("%d: %d is new child of %d\n", myrank, localNode, currentNode);
-					printf("%d DEBUG: %d has been visited as neighbour of %d\n", myrank, localNode, currentNode); 			}
+					printf("%d DEBUG: %d has been visited as neighbour of %d\n", myrank, localNode, currentNode); 							}
 #endif
 
 				//resolve distance metric later
 				if(bridgeNodeAll[localNode_*2+1] > currDepth+1) {
 					revisit[localNode][0] = 1;// mark - to be visited later
-//#ifdef DEBUG
+#ifdef DEBUG
 					printf("%d: %d: can change the depth for %d from %d to %d\n", myrank, bridgeRanks[bridgeNodeCurrIdx], localNode, bridgeNodeAll[localNode_*2+1], currDepth);
-//#endif
+#endif
 				}
 
 #ifdef DEBUG
@@ -809,9 +812,9 @@ void formBridgeNodesRoutes () {
 	//process on Bridge node core 0
 	if (bridgeNodeInfo[1] == 1 && coreID == 0) {
 
-//#ifdef DEBUG
+#ifdef DEBUG
 		printf("%d am the BN on core %d\n", myrank, coreID); 
-//#endif
+#endif
 
 		MPI_Request requestSend, requestRecv, requestRecvAll;
 		MPI_Status statusSend, statusRecv, statusRecvAll;
@@ -929,11 +932,11 @@ void formBridgeNodesRoutes () {
 			}
 		}
 
-//#ifdef DEBUG
+#ifdef DEBUG
 		for (j=0; j<midplane; j++) 
 			if (newBridgeNode[j] >= 0 && myrank == bridgeRanks[newBridgeNode[j]])
-				printf("%d: %d (%d) is the new BN for %d at distance %d\n", myrank, bridgeRanks[newBridgeNode[j]], newBridgeNode[j], j, bridgeNodeAll[j*2+1]);
-//#endif
+				printf("%d: %d (%d) is the new BN for %d at distance %d %d\n", myrank, bridgeRanks[newBridgeNode[j]], newBridgeNode[j], j, bridgeNodeAll[j*2+1], depthInfo[newBridgeNode[j]][j]);
+#endif
 
 		for (bn=0; bn<numBridgeNodes ; bn++) 
 			if (bridgeRanks[bn] == myrank) myWeight = int(avgWeight[bn]);
@@ -1182,9 +1185,9 @@ int main (int argc, char **argv) {
 		else
 			maxWeight = 1000;	//high
 
-//#ifdef DEBUG
+#ifdef DEBUG
 		if (nodeID < 60 && coreID < 2) printf("%d maxWeight = %d heapAvail = %d memAvail = %d\n", myrank, maxWeight, heapAvail, memAvail);
-//#endif
+#endif
 
 		if (coreID == 0) formBridgeNodesRoutes ();
 
@@ -1195,10 +1198,10 @@ int main (int argc, char **argv) {
 
 		double tOEnd = MPI_Wtime();
 
-//#ifdef DEBUG
+#ifdef DEBUG
 		if (coreID == 0) printf("%d: %d MyNewBN %d %d\n", myrank, ppn, newBridgeNode[myrank], bridgeRanks[newBridgeNode[myrank]]);
 		printf("%d: overhead %6.3f\n", myrank, tOEnd-tOStart);
-//#endif
+#endif
 
 		MPI_Barrier (MPI_COMM_WORLD);
 
@@ -1325,9 +1328,10 @@ int main (int argc, char **argv) {
 
 		double max[5];
 
-		MPI_Reduce(&tION[0], &max[0], 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-		MPI_Reduce(&tION[1], &max[1], 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-		MPI_Reduce(&tend, &max[2], 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+//just testing: turn these on
+		//MPI_Reduce(&tION[0], &max[0], 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+		//MPI_Reduce(&tION[1], &max[1], 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+		//MPI_Reduce(&tend, &max[2], 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
 		MPI_Finalize ();
 
