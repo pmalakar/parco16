@@ -106,11 +106,14 @@ void getPersonality (int myrank) {
 	initSystemParameters(myrank);
 
 #ifdef DEBUG
+
 	printf("Torus dimensions = (%u,%u,%u,%u,%u) Routing order = (%d,%d,%d,%d,%d)\n", hw.Size[0], hw.Size[1], hw.Size[2], hw.Size[3], hw.Size[4], routingOrder[0], routingOrder[1], routingOrder[2], routingOrder[3], routingOrder[4]);
+
 	printf("Rank: %d Node: %d Torus coords = (%u,%u,%u,%u,%u) distance to ION: %d link ID: %d\n", myrank, myrank/ppn, hw.Coords[0], hw.Coords[1], hw.Coords[2], hw.Coords[3], hw.Coords[4], bridgeNodeInfo[1], bridgeNodeInfo[0]);
 
 	if (myrank ==0)
 		printf("Torus wraps? %u,%u,%u,%u,%u\n", hw.isTorus[0], hw.isTorus[1], hw.isTorus[2], hw.isTorus[3], hw.isTorus[4]);
+
 #endif
 
 		/*
