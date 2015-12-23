@@ -105,8 +105,8 @@ int writeFile(dataBlock *datum, int count, int all) {
 	double start=0.0, end=0.0, test1=0.0, test2=0.0;
 	int nbytes=0, totalBytes=0, i;
 
-	MPI_Request sendreq;
-	MPI_Status sendst;
+	MPI_Request sendreq, nodesendreq, noderecvreq[ppn];
+	MPI_Status sendst, nodesendst, noderecvst[ppn];
 
 	int result;
 
@@ -129,22 +129,35 @@ int writeFile(dataBlock *datum, int count, int all) {
 #endif
 
 					if (coalesced == 1) {
-						if (coreID == 0) {
-							if (dataPerNode == NULL) printf("allocation error at %d\n", myrank);
-						}
 
-#ifdef DEBUG
-printf("%d will gather\n", myrank);		
-#endif
-						result = MPI_Gather (datum->getAlphaBuffer(), count, MPI_DOUBLE, dataPerNode, count, MPI_DOUBLE, 0, MPI_COMM_NODE);
+						if (coreID == 0) 
+							if (dataPerNode == NULL) printf("allocation error at %d\n", myrank);
+
+						//result = MPI_Gather (datum->getAlphaBuffer(), count, MPI_DOUBLE, dataPerNode, count, MPI_DOUBLE, 0, MPI_COMM_NODE);
+						//if (result != MPI_SUCCESS) 
+						//		prnerror (result, "coalesced nonBN node MPI_Gather error:");
+
+/* replacing gather by p2p */
+
+						if (coreID > 0)
+							result = MPI_Isend (datum->getAlphaBuffer(), count, MPI_DOUBLE, nodeID, myrank, MPI_COMM_NODE, &nodesendreq);	
+
 						if (result != MPI_SUCCESS) 
-								prnerror (result, "coalesced nonBN node MPI_Gather Error:");
+								prnerror (result, "coalesced nonBN node MPI_Isend error:");
+
+						if (coreID == 0) {
+							for (int i=1; i<ppn; i++)
+								MPI_Irecv (dataPerNode+count*i, count, MPI_DOUBLE, nodeID+i, nodeID+i, MPI_COMM_NODE, &noderecvreq[i]);
+							MPI_Waitall(ppn-1, noderecvreq, noderecvst);
+						}						
+
+/* end - replacing gather by p2p */
 
 						//only core 0 sends
 						if (coreID == 0) {
 							result = MPI_Isend (dataPerNode, count*ppn, MPI_DOUBLE, myBridgeRank, myBridgeRank, MPI_COMM_WORLD, &sendreq);	
 							if (result != MPI_SUCCESS) 
-								prnerror (result, "coalesced nonBN node MPI_Isend Error:");
+								prnerror (result, "coalesced nonBN node MPI_Isend error:");
 							MPI_Wait (&sendreq, &sendst);
 						}
 					}
