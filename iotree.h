@@ -205,6 +205,7 @@ void alloc_free (dataBlock *datum, int type) {
 
 }
 
+void getData(int);
 
 void prnerror (int error_code, char *string)
 {
