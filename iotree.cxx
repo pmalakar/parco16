@@ -324,21 +324,21 @@ int writeFile(dataBlock *datum, int count, int all) {
 
 			// Write out my data first, before waiting for senders' data 
 			if (blocking == 1) {
-					assert(fileHandle);
-					assert(datum->getAlphaBuffer());
-					result = MPI_File_write_at (fileHandle, (MPI_Offset)myrank*count*sizeof(double), datum->getAlphaBuffer(), count, MPI_DOUBLE, &status);
-					if (result != MPI_SUCCESS) 
-						prnerror (result, "BN own MPI_File_write_at Error:");
+				assert(fileHandle);
+				assert(datum->getAlphaBuffer());
+				result = MPI_File_write_at (fileHandle, (MPI_Offset)myrank*count*sizeof(double), datum->getAlphaBuffer(), count, MPI_DOUBLE, &status);
+				if (result != MPI_SUCCESS) 
+					prnerror (result, "BN own MPI_File_write_at Error:");
 			}
 			else {
-					assert(fileHandle);
-					assert(datum->getAlphaBuffer());
+				assert(fileHandle);
+				assert(datum->getAlphaBuffer());
 #ifdef DEBUG
+				printf("BN %d will write %d doubles req %d\n", myrank, count, myWeight);
+				if (myrank == bridgeRanks[0])
 					printf("BN %d will write %d doubles req %d\n", myrank, count, myWeight);
-					if (myrank == bridgeRanks[0])
-						printf("BN %d will write %d doubles req %d\n", myrank, count, myWeight);
 #endif
-					result = MPI_File_iwrite_at (fileHandle, (MPI_Offset)myrank*count*sizeof(double), datum->getAlphaBuffer(), count, MPI_DOUBLE, &wrequest[myWeight]);
+				result = MPI_File_iwrite_at (fileHandle, (MPI_Offset)myrank*count*sizeof(double), datum->getAlphaBuffer(), count, MPI_DOUBLE, &wrequest[myWeight]);
 			}
 
 			int idx;
@@ -459,7 +459,6 @@ void getData(int myWeight) {
 #ifdef DEBUG
 			printf("\n%d: myWeight = %d shuffledNodes[%d] = %d\n\n", myrank, myWeight, i, shuffledNodes[i]);
 #endif
-
 
 			//MPI_Irecv (shuffledNodesData[i], datalen, MPI_DOUBLE, shuffledNodes[i], myrank, MPI_COMM_WORLD, &req[i]);				
 			MPI_Irecv (shuffledNodesData[i], datalen, MPI_DOUBLE, shuffledNodes[i], shuffledNodes[i], MPI_COMM_WORLD, &req[i]);				

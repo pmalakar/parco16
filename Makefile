@@ -45,9 +45,7 @@ OBJS = 	$(SRCS:.cxx=.o)
 ifdef mpi3
 TARGET = iotree.mpi3.test
 else
-TARGET = iotree 
-#TARGET = iotreeallnw #mu
-#TARGET = iotreemod
+TARGET = iotree
 endif
 
 all:    $(TARGET)
