@@ -135,8 +135,8 @@ int writeFile(dataBlock *datum, int count, int all) {
 
 				if (coalesced == 1) {
 
-					if (coreID == 0) 
-						if (dataPerNode == NULL) printf("allocation error at %d\n", myrank);
+					if (coreID == 0) assert(dataPerNode); 
+					//if (dataPerNode == NULL) printf("allocation error at %d\n", myrank);
 
 					assert(datum->getAlphaBuffer());
 
@@ -178,11 +178,11 @@ int writeFile(dataBlock *datum, int count, int all) {
 							if (coreID < ppn/2) collector = 0;
 							else collector = ppn/2;
 							//printf ("%d (%d, %d) sends %d bytes to core %d on node %d\n", myrank, nodeID, coreID, count, collector, nodeID);
-							result = MPI_Send (datum->getAlphaBuffer(), count, MPI_DOUBLE, collector, coreID, MPI_COMM_NODE);	
-							//result = MPI_Isend (datum->getAlphaBuffer(), count, MPI_DOUBLE, collector, coreID, MPI_COMM_NODE, &nodesendreq);	
+							//result = MPI_Send (datum->getAlphaBuffer(), count, MPI_DOUBLE, collector, coreID, MPI_COMM_NODE);	
+							result = MPI_Isend (datum->getAlphaBuffer(), count, MPI_DOUBLE, collector, coreID, MPI_COMM_NODE, &nodesendreq);	
 							if (result != MPI_SUCCESS) 
 								prnerror (result, "coalesced nonBN node MPI_Isend error:");
-							//MPI_Wait (&nodesendreq, &nodesendst);
+							MPI_Wait (&nodesendreq, &nodesendst);
 						}
 
 						//Receive data at collectors from senders in the node
@@ -244,15 +244,21 @@ int writeFile(dataBlock *datum, int count, int all) {
 
 					//only core 0 sends
 					if (coreID == 0) {
-						//result = MPI_Isend (dataPerNode, count*ppn, MPI_DOUBLE, myBridgeRank, myBridgeRank, MPI_COMM_WORLD, &sendreq);	
-						result = MPI_Send (dataPerNode, datalen, MPI_DOUBLE, myBridgeRank, myrank, MPI_COMM_WORLD); //, &sendreq);	
+						//result = MPI_Send (dataPerNode, datalen, MPI_DOUBLE, myBridgeRank, myrank, MPI_COMM_WORLD); //, &sendreq);	
+						result = MPI_Isend (dataPerNode, datalen, MPI_DOUBLE, myBridgeRank, myrank, MPI_COMM_WORLD, &sendreq);	
 						if (result != MPI_SUCCESS) 
-							prnerror (result, "coalesced nonBN node MPI_Isend error:");
-						//MPI_Wait (&sendreq, &sendst);
+							prnerror (result, "coalesced nonBN node core 0 MPI_Isend error:");
+						MPI_Wait (&sendreq, &sendst);
+					//	printf("%d got\n", myrank);
+					//	fflush(stdout);
 					}
-					//only core 0 sends
+
+					//additionally, core ppn/2 sends
 					if (streams == 2 && coreID == ppn/2) {
-						result = MPI_Send (dataPerNode, datalen, MPI_DOUBLE, myBridgeRank, myrank, MPI_COMM_WORLD); //, &sendreq);	
+						result = MPI_Isend (dataPerNode, datalen, MPI_DOUBLE, myBridgeRank, myrank, MPI_COMM_WORLD, &sendreq);	
+						if (result != MPI_SUCCESS) 
+							prnerror (result, "coalesced nonBN node core ppn/2 MPI_Isend error:");
+						MPI_Wait (&sendreq, &sendst);
 					}
 
 				}
@@ -260,10 +266,12 @@ int writeFile(dataBlock *datum, int count, int all) {
 				else {
 					MPI_Isend (datum->getAlphaBuffer(), count, MPI_DOUBLE, myBridgeRank, myBridgeRank, MPI_COMM_WORLD, &sendreq);	
 					MPI_Wait (&sendreq, &sendst);
-				}
+			
 #ifdef DEBUG
-			  	printf("%d sent to %d\n", myrank, bridgeRanks[newBridgeNode[myrank]]);
+			  		printf("%d sent to %d\n", myrank, bridgeRanks[newBridgeNode[myrank]]);
 #endif
+				}
+
 		  	}
 
 			//If I have not been assigned a new bridge node, write 
@@ -345,7 +353,9 @@ int writeFile(dataBlock *datum, int count, int all) {
 					assert(shuffledNodesData[i]);
 					assert(shuffledNodes);
 					MPI_Irecv (shuffledNodesData[i], count, MPI_DOUBLE, shuffledNodes[i], myrank, MPI_COMM_WORLD, &req[i]); 
+#ifdef DEBUG
 					printf("\n%d: myWeight = %d shuffledNodes[%d] = %d\n\n", myrank, myWeight, i, shuffledNodes[i]);
+#endif
 				}
 //#pragma omp parallel for
 				for (int i=0; i<myWeight ; i++) {
@@ -445,9 +455,12 @@ void getData(int myWeight) {
 			assert(shuffledNodesData);
 			assert(shuffledNodesData[i]);
 			assert(shuffledNodes);
+
 #ifdef DEBUG
 			printf("\n%d: myWeight = %d shuffledNodes[%d] = %d\n\n", myrank, myWeight, i, shuffledNodes[i]);
 #endif
+
+
 			//MPI_Irecv (shuffledNodesData[i], datalen, MPI_DOUBLE, shuffledNodes[i], myrank, MPI_COMM_WORLD, &req[i]);				
 			MPI_Irecv (shuffledNodesData[i], datalen, MPI_DOUBLE, shuffledNodes[i], shuffledNodes[i], MPI_COMM_WORLD, &req[i]);				
 		}
@@ -456,6 +469,7 @@ void getData(int myWeight) {
 		for (int i=0; i<myWeight ; i++) {
 
 			MPI_Waitany (myWeight, req, &idx, &stat);
+
 #ifdef DEBUG
 			printf ("BN %d received data from %d\n", myrank, shuffledNodes[idx]);
 #endif
@@ -1106,8 +1120,13 @@ void formBridgeNodesRoutes () {
 		for (bn=0; bn<numBridgeNodes ; bn++) 
 			if (bridgeRanks[bn] == myrank) myWeight = int(avgWeight[bn]);
 
-	  if (myrank == bridgeRanks[0])
-			MPI_Send(newBridgeNode, midplane, MPI_INT, rootps, bridgeRanks[0], MPI_COMM_WORLD);	
+		MPI_Request bnreq;
+		MPI_Status bnst;
+	  	if (myrank == bridgeRanks[0]) {
+			//MPI_Send(newBridgeNode, midplane, MPI_INT, rootps, bridgeRanks[0], MPI_COMM_WORLD);	
+			MPI_Isend(newBridgeNode, midplane, MPI_INT, rootps, bridgeRanks[0], MPI_COMM_WORLD, &bnreq);	
+			MPI_Wait (&bnreq, &bnst);
+		}
 
 /*
  *
@@ -1166,8 +1185,8 @@ void distributeInfo() {
 		}
 
 		if (k+1 != myWeight) {
-		 printf("%d: Error in number of shuffledNodes: %d %d\n", myrank, k, myWeight);
-		//abort
+			printf("%d: Error in number of shuffledNodes: %d %d\n", myrank, k, myWeight);
+			//abort - return error code
 		}
 
 		//Allocation	
@@ -1224,8 +1243,11 @@ void initTree(int n) {
 
 int main (int argc, char **argv) {
 
-//		if (argc<5) return 0;
+		int required=3, provided;
+//		if (argc<6) return 0;
 		MPI_Init (&argc, &argv);
+		//MPI_Init_thread (&argc, &argv, required, &provided);
+		//if (required > provided) printf("\nprovided %d\n", provided);
 
 		MPI_Comm_rank (MPI_COMM_WORLD, &myrank);
 		MPI_Comm_size (MPI_COMM_WORLD, &commsize);
