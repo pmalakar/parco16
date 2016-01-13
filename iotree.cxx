@@ -310,15 +310,14 @@ int writeFile(dataBlock *datum, int count, int all) {
 			assert(shuffledNodesData);
 
 #ifdef DEBUG
-			if (coalesced == 1) {
-					if (coreID == 0) { 
-						printf ("%d: allocated %d * %d bytes\n", myrank, myWeight, count*ppn);
-					}
-			}
+			if (coalesced == 1) 
+				if (coreID == 0)  
+					printf ("%d: allocated %d * %d bytes\n", myrank, myWeight, count*ppn);
+			
 			else {
-					if (myrank == bridgeRanks[0])
-						printf ("%d: about to allocate %d * %d bytes\n", myrank, myWeight, count);
-					printf ("uncoalesced %d: allocated %d * %d bytes\n", myrank, myWeight, count);
+				if (myrank == bridgeRanks[0])
+					printf ("%d: about to allocate %d * %d bytes\n", myrank, myWeight, count);
+				printf ("uncoalesced %d: allocated %d * %d bytes\n", myrank, myWeight, count);
 			}
 #endif
 
@@ -363,18 +362,13 @@ int writeFile(dataBlock *datum, int count, int all) {
 #ifdef DEBUG
 					printf ("BN %d received data from %d\n", myrank, shuffledNodes[idx]);
 #endif
-					if (blocking == 1) { 
+					if (blocking == 1)  
 						result = MPI_File_write_at (fileHandle, (MPI_Offset)shuffledNodes[idx]*count*sizeof(double), shuffledNodesData[idx], count, MPI_DOUBLE, &status);
-						if (result != MPI_SUCCESS) 
-							prnerror (result, "BN for nonblocking MPI_File_write_at Error:");
-					}
 					else 
 						result = MPI_File_iwrite_at (fileHandle, (MPI_Offset)shuffledNodes[idx]*count*sizeof(double), shuffledNodesData[idx], count, MPI_DOUBLE, &wrequest[idx]);
+					if (result != MPI_SUCCESS) 
+						prnerror (result, "BN for nonblocking MPI_File_write_at Error:");
 						
-						//if (blocking == 1) {
-						//	MPI_Get_elements( &status, MPI_CHAR, &nbytes );
-						//	totalBytes += nbytes;
-						//}
 				}
 
 				// wait for own data and receivers' 
@@ -382,13 +376,7 @@ int writeFile(dataBlock *datum, int count, int all) {
 					MPI_Waitall (myWeight+1, wrequest, wstatus);
 			}
 			
-				//free 
-			//	if ((coalesced == 1 && coreID == 0) || coalesced == 0)
-				//if (coalesced == 0)
-				//if (coalesced == 1 && coreID == 0)
-				//	for (int i=0; i<myWeight; i++) free(shuffledNodesData[i]);
-				//free(shuffledNodesData);
-			}
+		}
 		}
 
 		// all = 1, default independent write
@@ -487,21 +475,20 @@ void getData(int myWeight) {
 			//MPI_Waitall (myWeight+1, wrequest, wstatus);
 	}
 
-	if (blocking == 0) 
-		MPI_Wait(&wrequest[myWeight], &wstatus[myWeight]);
-
+	//Additionally, use ppn/2 th core for writing: concurrent network flows!!
 	if (streams == 2) {
-	//FIXME	
+	
 		if (coreID == ppn/2) {
 			
 			for (int i=0; i<myWeight ; i++) { 
+
 				assert(shuffledNodesData);
 				assert(shuffledNodesData[i]);
 				assert(shuffledNodes);
 #ifdef DEBUG
 				printf("\n%d: myWeight = %d shuffledNodes[%d] = %d\n\n", myrank, myWeight, i, shuffledNodes[i]);
 #endif
-				MPI_Irecv (shuffledNodesData[i], datalen, MPI_DOUBLE, shuffledNodes[i]+ppn/2, myrank, MPI_COMM_WORLD, &req[i]);				
+				MPI_Irecv (shuffledNodesData[i], datalen, MPI_DOUBLE, shuffledNodes[i], shuffledNodes[i], MPI_COMM_WORLD, &req[i]);				
 			}
 
 //#pragma omp parallel for
@@ -522,11 +509,16 @@ void getData(int myWeight) {
 			}
 
 			if (blocking == 0) 
-				MPI_Waitall (myWeight+1, wrequest, wstatus);
+				MPI_Waitall (myWeight, wrequest, wstatus);
+				//MPI_Waitall (myWeight+1, wrequest, wstatus);
 	
 		}
 
 	}
+
+	//all cores on BN wait for their own data
+	if (blocking == 0) 
+		MPI_Wait(&wrequest[myWeight], &wstatus[myWeight]);
 
 }
 
