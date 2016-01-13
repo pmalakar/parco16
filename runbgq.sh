@@ -10,31 +10,32 @@ boot-block --reboot
 PROG=iotree
 NODES=$1
 
-#for PROG in iotree #iotree_2coll iotree_1coll iotree_gather
-#do
 for iter in 1 # 2 
 do
-for THRD in 1 #2 4 8 16 
+for THRD in 1 #2 4 8 16
 do
-for ppn in 16 #8 #4 #2 1
+for ppn in 16 #4 #2 1
 do
-for MSG in 512 #512 #1024 #2048 4096 8192
-#for MSG in 1 2 4 512 1024 #2048 4096 8192
+for MSG in 32 64 128 #1024 #2048 4096 8192
 do 
- for coalesced in 1 0 
+ for coalesced in 0 1 
  do
- for streams in 1 0 #2
+ for streams in 0 1 2
  do
  for blocking in 0 #1
  do
  rm -f dummy*
- for type in 0 1 #2 
+ for type in 1 0 #2 
  do
 	if [ $type -gt 0 ] && [ $coalesced -eq 1 ] 
 	then
 			continue;
 	fi
-	if [ $type -ge 0 ] && [ $streams -gt 0 ] && [ $coalesced -eq 0 ] 
+	if [ $type -gt 0 ] && [ $streams -gt 0 ] 
+	then
+			continue;
+	fi
+  if [ $type -eq 0 ] && [ $streams -gt 0 ] && [ $coalesced -eq 0 ] 
 	then
 			continue;
 	fi
@@ -45,46 +46,84 @@ do
 	echo "* * * * *"
 	echo 
 	echo "Starting $OUTPUT with numthreads=$THRD ppn=$ppn args=${MSG} ${coalesced} ${blocking} ${type} ${streams}"
-	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs MUSPI_NUMINJFIFOS=2 MUSPI_NUMRECFIFOS=2 --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_numfifos_2
-  	rm -f dummy*
-	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs MUSPI_NUMINJFIFOS=4 MUSPI_NUMRECFIFOS=4 --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_numfifos_4
-  	rm -f dummy*
-	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs MUSPI_NUMINJFIFOS=8 MUSPI_NUMRECFIFOS=8 --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_numfifos_8
-  	rm -f dummy*
-	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "MUSPI_INJFIFOSIZE=4194304" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_injfifo_4M
-  	rm -f dummy*
-	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "MUSPI_INJFIFOSIZE=8388608" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_injfifo_8M
-  	rm -f dummy*
-	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "MUSPI_INJFIFOSIZE=16777216" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_injfifo_16M
-  	rm -f dummy*
-	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "MUSPI_RECFIFOSIZE=4194304" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_recfifo_4M
-  	rm -f dummy*
-	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "MUSPI_RECFIFOSIZE=8388608" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_recfifo_8M
-  	rm -f dummy*
-	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "MUSPI_RECFIFOSIZE=16777216" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_recfifo_16M
-  	rm -f dummy*
+
 	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}
 
-	continue;
+	if [ $type -gt 0 ] 
+	then
+			continue;
+	fi
 
-  	rm -f dummy*
-	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "PAMID_RZV_LOCAL=4M" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_rzv_local_4M
-  	rm -f dummy*
-	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "PAMID_RZV_LOCAL=8M" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_rzv_local_8M
-  	rm -f dummy*
-	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "PAMID_RZV=4M" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_rzv_remote_4M
-  	rm -f dummy*
-	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "PAMID_RZV=8M" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_rzv_remote_8M
-  	rm -f dummy*
-	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs PAMID_RZV=16M PAMID_STATISTICS=1 PAMID_VERBOSE=1 : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_rzv_remote_16M
-  	rm -f dummy*
-	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "PAMID_RZV=4M" --envs "PAMID_RZV_LOCAL=4M" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_rzv_4M
-  	rm -f dummy*
-	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "PAMID_RZV=8M" --envs "PAMID_RZV_LOCAL=8M" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_rzv_8M
-  	#rm -f dummy*
-	#runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "PAMID_RZV=4M" --envs "PAMID_RZV_LOCAL=4M" --envs "PAMID_THREAD_MULTIPLE=1" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_rzv_ptm
-  	#rm -f dummy*
 	#runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "PAMID_THREAD_MULTIPLE=1" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_ptm
+
+  rm -f dummy*
+	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "PAMID_RZV_LOCAL=4M" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_rzv_local_4M
+  rm -f dummy*
+	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs MUSPI_NUMINJFIFOS=2 MUSPI_NUMRECFIFOS=2 --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_numfifos_2
+
+
+  rm -f dummy*
+	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs MUSPI_RECFIFOSIZE=2097152 MUSPI_INJFIFOSIZE=2097152 --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_injrec_2M
+  rm -f dummy*
+	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "MUSPI_INJFIFOSIZE=2097152" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_injfifo_2M
+  rm -f dummy*
+	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "MUSPI_INJFIFOSIZE=4194304" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_injfifo_4M
+  rm -f dummy*
+	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "MUSPI_RECFIFOSIZE=2097152" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_recfifo_2M
+  rm -f dummy*
+	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "MUSPI_RECFIFOSIZE=4194304" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_recfifo_4M
+  rm -f dummy*
+	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs PAMID_RZV_LOCAL=2M MUSPI_RECFIFOSIZE=2097152 --envs PAMID_STATISTICS=1 --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_rzv_local_2M_recfifo_2M
+  rm -f dummy*
+	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs PAMID_RZV_LOCAL=4M MUSPI_RECFIFOSIZE=2097152 --envs PAMID_STATISTICS=1 --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_rzv_local_4M_recfifo_2M
+  rm -f dummy*
+	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs MUSPI_NUMINJFIFOS=4 MUSPI_NUMRECFIFOS=4 --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_numfifos_4
+  rm -f dummy*
+	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs MUSPI_NUMINJFIFOS=8 MUSPI_NUMRECFIFOS=8 --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_numfifos_8
+  rm -f dummy*
+	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "MUSPI_INJFIFOSIZE=8388608" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_injfifo_8M
+  rm -f dummy*
+	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "MUSPI_INJFIFOSIZE=16777216" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_injfifo_16M
+  rm -f dummy*
+	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "MUSPI_RECFIFOSIZE=4194304" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_recfifo_4M
+  rm -f dummy*
+	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "MUSPI_RECFIFOSIZE=8388608" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_recfifo_8M
+  rm -f dummy*
+	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "MUSPI_RECFIFOSIZE=16777216" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_recfifo_16M
+
+
+ 	rm -f dummy*
+	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs MUSPI_NUMINJFIFOS=2 MUSPI_NUMRECFIFOS=2 PAMID_RZV_LOCAL=2M MUSPI_INJFIFOSIZE=2097152 --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_numfifos_2_inj_2M_rzvlocal_2M
+
+	if [ $MSG -gt 32 ] 
+	then
+			continue;
+	fi
+	
+  rm -f dummy*
+	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "PAMID_RZV=4M" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_rzv_remote_4M
+  rm -f dummy*
+	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "PAMID_RZV_LOCAL=4M" --envs "PAMID_RZV=4M" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_rzv_4M
+  rm -f dummy*
+	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs MUSPI_RECFIFOSIZE=4194304 MUSPI_INJFIFOSIZE=4194304 --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_injrec_4M
+  rm -f dummy*
+	runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs PAMID_RZV_LOCAL=4M PAMID_RZV=4M MUSPI_NUMINJFIFOS=2 MUSPI_NUMRECFIFOS=2 --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_rzv_4M_numfifos2
+
+  #rm -f dummy*
+	#runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs "PAMID_RZV=8M" --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_rzv_remote_8M
+
+
+ 	#rm -f dummy*
+	#runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs MUSPI_NUMINJFIFOS=2 MUSPI_NUMRECFIFOS=2 PAMID_RZV=4M PAMID_RZV_LOCAL=4M MUSPI_INJFIFOSIZE=4194304 --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_numfifos_2_inj_4M_rzv_4M
+ 	#rm -f dummy*
+	#runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs MUSPI_NUMINJFIFOS=2 MUSPI_NUMRECFIFOS=2 PAMID_RZV=8M PAMID_RZV_LOCAL=8M MUSPI_INJFIFOSIZE=4194304 --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_numfifos_2_inj_4M_rzv_8M
+
+ 	#rm -f dummy*
+	#runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs MUSPI_NUMINJFIFOS=4 MUSPI_NUMRECFIFOS=4 PAMID_RZV=4M PAMID_RZV_LOCAL=4M MUSPI_INJFIFOSIZE=4194304 --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_numfifos_4_inj_4M_rzv_4M
+ 	#rm -f dummy*
+	#runjob --np $RANKS -p $ppn --block $COBALT_PARTNAME --verbose=INFO --envs "OMP_MAX_NUM_THREADS=${THRD}" --envs MUSPI_NUMINJFIFOS=4 MUSPI_NUMRECFIFOS=4 PAMID_RZV=8M PAMID_RZV_LOCAL=8M MUSPI_INJFIFOSIZE=4194304 --envs "PAMID_STATISTICS=1" --envs "PAMID_VERBOSE=1" : ${PROG} ${MSG} ${coalesced} ${blocking} ${type} ${streams} > ${OUTPUT}_numfifos_4_inj_4M_rzv_8M
+
+
 	echo 
 	echo "* * * * *"
 	echo
