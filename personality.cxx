@@ -73,16 +73,18 @@ inline int min (int x, int y) {
  * - get ranks per node
  * - get routing order
  */
-void initSystemParameters(int myrank) {
+void initSystemParameters(int rank) {
 
   int i;
 
 	MPIX_Hardware(&hw);
 	ppn = hw.ppn;
   coreID = hw.coreID;	
-  nodeID = myrank/ppn;
+  nodeID = rank/ppn;
 
+#ifdef STATS
 	Kernel_GetMemorySize(KERNEL_MEMSIZE_HEAPAVAIL, &heapAvail); 
+#endif
 
 	routingOrder = new int[MPIX_TORUS_MAX_DIMS];
 	getRoutingOrder(routingOrder);
@@ -97,47 +99,54 @@ void initSystemParameters(int myrank) {
 	bridgeNodeInfo[1] = MPIX_IO_distance (); 
 }
 
-void getPersonality (int myrank) {
+void getPersonality (int rank, int destRank) {
 		
 	//local variables
 	int i;
-  int unitHop = 1;
+	int unitHop = 1;
 
-	initSystemParameters(myrank);
+	int flag=0;
+
+	if (destRank == -1) {
+		initSystemParameters(rank);
+		destRank = bridgeNodeInfo[0];
+		flag = 1;
+	}
 
 #ifdef DEBUG
 
 	printf("Torus dimensions = (%u,%u,%u,%u,%u) Routing order = (%d,%d,%d,%d,%d)\n", hw.Size[0], hw.Size[1], hw.Size[2], hw.Size[3], hw.Size[4], routingOrder[0], routingOrder[1], routingOrder[2], routingOrder[3], routingOrder[4]);
 
-	printf("Rank: %d Node: %d Torus coords = (%u,%u,%u,%u,%u) distance to ION: %d link ID: %d\n", myrank, myrank/ppn, hw.Coords[0], hw.Coords[1], hw.Coords[2], hw.Coords[3], hw.Coords[4], bridgeNodeInfo[1], bridgeNodeInfo[0]);
-
-	if (myrank ==0)
+	if (rank == 0)
 		printf("Torus wraps? %u,%u,%u,%u,%u\n", hw.isTorus[0], hw.isTorus[1], hw.isTorus[2], hw.isTorus[3], hw.isTorus[4]);
+
+	if (flag == 1)
+	printf("Rank: %d Node: %d Torus coords = (%u,%u,%u,%u,%u) distance to ION: %d link ID: %d\n", rank, rank/ppn, hw.Coords[0], hw.Coords[1], hw.Coords[2], hw.Coords[3], hw.Coords[4], bridgeNodeInfo[1], destRank);
 
 #endif
 
-		/*
-		 * Find coordinates of bridge node
-		 */
-		int bridgeCoords[6];
-		MPIX_Rank2torus (bridgeNodeInfo[0], bridgeCoords);
+	/*
+	 * Find coordinates of bridge node
+	 */
+	int destCoords[6];
+	MPIX_Rank2torus (destRank, destCoords);
 
-		/*
-		 * Initialize intermediate nodes in original path to the bridge node
+	/*
+	 * Initialize intermediate nodes in original path to the bridge node
      */
-		int intmdt_coords[6];
-		for (int dim=0; dim < MPIX_TORUS_MAX_DIMS; dim++) {
-			intmdt_coords[dim] = hw.Coords[dim];
-		}   
-		intmdt_coords[5] = 0;
+	int intmdtCoords[6];
+	for (int dim=0; dim < MPIX_TORUS_MAX_DIMS; dim++) 
+		intmdtCoords[dim] = hw.Coords[dim];
+	   
+	intmdtCoords[MPIX_TORUS_MAX_DIMS] = 0;
 
-		int hopnum = 0;
-		int hopDiff, intmdt_rank, child, parent;
-		child = myrank;
-		for (int dim=0; dim<MPIX_TORUS_MAX_DIMS; dim++) {
+	int hopnum = 0;
+	int hopDiff, intmdt_rank, child, parent;
+	child = rank;
+	for (int dim=0; dim<MPIX_TORUS_MAX_DIMS; dim++) {
 
 			int dimID = routingOrder[dim];
-			hopDiff = abs(bridgeCoords[dimID] - hw.Coords[dimID]);
+			hopDiff = abs(destCoords[dimID] - hw.Coords[dimID]);
 
 		//	if (hw.isTorus[dimID] == 1 && (hopDiff*2 > hw.Size[dimID])) 
 		//			hopDiff = hw.Size[dimID] - hopDiff ;
@@ -146,62 +155,69 @@ void getPersonality (int myrank) {
 					hopDiff = min (hopDiff, hw.Size[dimID] - hopDiff) ;
 
 #ifdef DEBUG
-			printf("SD %d to %d Difference in dim %d = %d\n", myrank, bridgeNodeInfo[0], dimID, hopDiff);
+			if (flag == 0)
+			printf("%d to %d difference in dim %d = %d\n", rank, destRank, dimID, hopDiff);
+
 #endif
 
 			for(int diff=0; diff<hopDiff ;diff++) {
 				if (hw.isTorus[dimID] == 0) {
-					if(bridgeCoords[dimID] < hw.Coords[dimID]) intmdt_coords[dimID] -= unitHop;  
-					else intmdt_coords[dimID] += unitHop;
+					if(destCoords[dimID] < hw.Coords[dimID]) intmdtCoords[dimID] -= unitHop;  
+					else intmdtCoords[dimID] += unitHop;
 				}
 				else {		// torus
-					if (abs(bridgeCoords[dimID] - hw.Coords[dimID])*2 > hw.Size[dimID]) {
-					//	printf("check > %d bridgecoords[%d]=%d hw.Coords[%d]=%d hw.Size[%d]=%d\n", myrank, dimID, bridgeCoords[dimID], dimID, hw.Coords[dimID], dimID, hw.Size[dimID]);
+					if (abs(destCoords[dimID] - hw.Coords[dimID])*2 > hw.Size[dimID]) {
+					//	printf("check > %d bridgecoords[%d]=%d hw.Coords[%d]=%d hw.Size[%d]=%d\n", rank, dimID, destCoords[dimID], dimID, hw.Coords[dimID], dimID, hw.Size[dimID]);
 
-						if (bridgeCoords[dimID] > hw.Coords[dimID]) 
-										intmdt_coords[dimID] = ((intmdt_coords[dimID] - unitHop) + hw.Size[dimID]) % hw.Size[dimID];  
+						if (destCoords[dimID] > hw.Coords[dimID]) 
+										intmdtCoords[dimID] = ((intmdtCoords[dimID] - unitHop) + hw.Size[dimID]) % hw.Size[dimID];  
 						else 
-										intmdt_coords[dimID] = (intmdt_coords[dimID] + unitHop) % hw.Size[dimID];
+										intmdtCoords[dimID] = (intmdtCoords[dimID] + unitHop) % hw.Size[dimID];
 					}
-					else if (abs(bridgeCoords[dimID] - hw.Coords[dimID])*2 < hw.Size[dimID]) {
-					//	printf("check < %d bridgecoords[%d]=%d hw.Coords[%d]=%d hw.Size[%d]=%d\n", myrank, dimID, bridgeCoords[dimID], dimID, hw.Coords[dimID], dimID, hw.Size[dimID]);
-						if (bridgeCoords[dimID] < hw.Coords[dimID]) 
-										intmdt_coords[dimID] = ((intmdt_coords[dimID] - unitHop) + hw.Size[dimID]) % hw.Size[dimID];  
+					else if (abs(destCoords[dimID] - hw.Coords[dimID])*2 < hw.Size[dimID]) {
+					//	printf("check < %d bridgecoords[%d]=%d hw.Coords[%d]=%d hw.Size[%d]=%d\n", rank, dimID, destCoords[dimID], dimID, hw.Coords[dimID], dimID, hw.Size[dimID]);
+						if (destCoords[dimID] < hw.Coords[dimID]) 
+										intmdtCoords[dimID] = ((intmdtCoords[dimID] - unitHop) + hw.Size[dimID]) % hw.Size[dimID];  
 						else 
-										intmdt_coords[dimID] = (intmdt_coords[dimID] + unitHop) % hw.Size[dimID];
+										intmdtCoords[dimID] = (intmdtCoords[dimID] + unitHop) % hw.Size[dimID];
 					}
 					else {
 									//if source coord is even, plus direction
 						if (hw.Coords[dimID]%2 == 0)	// see phil's email: Aug 22, 2014
-										intmdt_coords[dimID] = (intmdt_coords[dimID] + unitHop) % hw.Size[dimID]; 		//even source coord: traverse in plus direction  
+										intmdtCoords[dimID] = (intmdtCoords[dimID] + unitHop) % hw.Size[dimID]; 		//even source coord: traverse in plus direction  
 						else 
-										intmdt_coords[dimID] = ((intmdt_coords[dimID] - unitHop) + hw.Size[dimID]) % hw.Size[dimID];  
+										intmdtCoords[dimID] = ((intmdtCoords[dimID] - unitHop) + hw.Size[dimID]) % hw.Size[dimID];  
 					}
 				}
 
 				++hopnum;
 
 				//get the rank
-				MPIX_Torus2rank (intmdt_coords, &intmdt_rank);
+				MPIX_Torus2rank (intmdtCoords, &intmdt_rank);
 				parent = intmdt_rank;
-#ifdef DEBUG
-				printf ("Enroute %d (%d %d %d %d %d) to %d (%d %d %d %d %d) Hop %d: in dimension %d: to rank %d (%d %d %d %d %d)\n", \
-				myrank, hw.Coords[0], hw.Coords[1], hw.Coords[2], hw.Coords[3], hw.Coords[4], \
-				bridgeNodeInfo[0], bridgeCoords[0], bridgeCoords[1], bridgeCoords[2], bridgeCoords[3], bridgeCoords[4], \
-				hopnum, dimID, intmdt_rank, intmdt_coords[0], intmdt_coords[1], intmdt_coords[2], intmdt_coords[3], intmdt_coords[4]);
 
-				printf ("Route %d to %d Hop %d\n", myrank, intmdt_rank, hopnum);
-				printf (" %d->%d;\n", child, parent);
+				if (flag == 0) {			
+				printf ("Enroute %d (%d %d %d %d %d) to %d (%d %d %d %d %d) Hop %d: in dimension %d Child %d to Parent %d (%d %d %d %d %d)\n", \
+				rank, hw.Coords[0], hw.Coords[1], hw.Coords[2], hw.Coords[3], hw.Coords[4], \
+				destRank, destCoords[0], destCoords[1], destCoords[2], destCoords[3], destCoords[4], \
+				hopnum, dimID, child, intmdt_rank, intmdtCoords[0], intmdtCoords[1], intmdtCoords[2], intmdtCoords[3], intmdtCoords[4]);
+
+#ifdef DEBUG
+				printf ("Route %d to %d Hop %d\n", rank, intmdt_rank, hopnum);
 #endif
+				printf ("%d->%d;\n", child, parent);
+
+				}
+
 				child = parent;
 			}
 		}   
 
 #ifdef DEBUG
 		//Check if everyone was routed to their bridge nodes?
-		if (parent != bridgeNodeInfo[0] && bridgeNodeInfo[1] > 1)  printf("Rank %d lost, did not reach %d, instead captivated by %d :D\n", myrank, bridgeNodeInfo[0], parent);
-		if (hopnum != bridgeNodeInfo[1]-1)  printf("Rank %d differs in number hops %d!=%d !!!!\n", myrank, bridgeNodeInfo[1], hopnum);
-		printf ("%d reaches %d in %d hops\n", myrank, bridgeNodeInfo[0], hopnum);
+		if (parent != destRank && bridgeNodeInfo[1] > 1)  printf("Rank %d lost, did not reach %d, instead captivated by %d :D\n", rank, destRank, parent);
+		if (hopnum != bridgeNodeInfo[1]-1)  printf("Rank %d differs in number hops %d!=%d !!!!\n", rank, bridgeNodeInfo[1], hopnum);
+		printf ("%d reaches %d in %d hops\n", rank, destRank, hopnum);
 #endif
 
 		return;
