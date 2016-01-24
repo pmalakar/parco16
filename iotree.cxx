@@ -171,12 +171,14 @@ int writeFile(dataBlock *datum, int count, int all) {
 /* end - replacing gather by p2p */
 
 // trying 2 collectors instead of just core 0
-					else if (streams == 2) {
+					else if (streams >= 2) {
 
 						//Send data to collectors
-						if (coreID != 0 && coreID != ppn/2) {
-							if (coreID < ppn/2) collector = 0;
-							else collector = ppn/2;
+						//if (coreID != 0 && coreID != ppn/2) {
+						if (coreID%(ppn/streams) != 0) {
+							//if (coreID < ppn/2) collector = 0;
+							//else collector = ppn/2;
+							collector = (ppn/streams) * (coreID/(ppn/streams));
 							//printf ("%d (%d, %d) sends %d bytes to core %d on node %d\n", myrank, nodeID, coreID, count, collector, nodeID);
 							//result = MPI_Send (datum->getAlphaBuffer(), count, MPI_DOUBLE, collector, coreID, MPI_COMM_NODE);	
 							result = MPI_Isend (datum->getAlphaBuffer(), count, MPI_DOUBLE, collector, coreID, MPI_COMM_NODE, &nodesendreq);	
@@ -186,51 +188,31 @@ int writeFile(dataBlock *datum, int count, int all) {
 						}
 
 						//Receive data at collectors from senders in the node
-						else if (coreID == 0) {
+						//else if (coreID == 0) {
+						else if (coreID%(ppn/streams) == 0) {
+							int start = coreID+1, end = coreID + ppn/streams;
 							dataPerNode[0] = *(datum->getAlphaBuffer());
-							for (int i=1; i<ppn/2; i++) {
-								MPI_Irecv (dataPerNode+count*i, count, MPI_DOUBLE, i, i, MPI_COMM_NODE, &noderecvreq[i-1]);
-								//printf ("%d (%d, %d) waiting for %d\n", myrank, nodeID, coreID, i);
-							}
-							MPI_Waitall (ppn/2-1, noderecvreq, noderecvst);	// cores 1 - ppn/2-1
-
-							//If core 0 is the sole sender
-						/*	MPI_Status st;	
-							result = MPI_Irecv (dataPerNode+count*ppn/2, count*ppn/2, MPI_DOUBLE, ppn/2, ppn/2, MPI_COMM_NODE, &noderecvreq[ppn/2-1]);
-							if (result != MPI_SUCCESS) 
-								prnerror (result, "coalesced MPI_Recv error:");
-							MPI_Waitall (ppn/2, noderecvreq, noderecvst);	// cores 1 - ppn/2-1
-						*/
-						}
-						else if (coreID == ppn/2) {
-							dataPerNode[0] = *(datum->getAlphaBuffer());
-							for (int i=ppn/2+1; i<ppn; i++) {
-								int j = i - ppn/2;
+							for (int i=start; i<end; i++) {
+								int j = i - coreID; // ppn/streams;
 								MPI_Irecv (dataPerNode+count*j, count, MPI_DOUBLE, i, i, MPI_COMM_NODE, &noderecvreq[j-1]);
-								//printf ("%d (%d, %d) waiting for %d\n", myrank, nodeID, coreID, i);
+								//MPI_Irecv (dataPerNode+count*i, count, MPI_DOUBLE, i, i, MPI_COMM_NODE, &noderecvreq[i-1]);
 							}
-							MPI_Waitall (ppn/2-1, noderecvreq, noderecvst);	// cores 1 - ppn/2-1
-							
-							//If core 0 is the sole sender
-/*							result = MPI_Send (dataPerNode, count*ppn/2, MPI_DOUBLE, 0, coreID, MPI_COMM_NODE);	
-							if (result != MPI_SUCCESS) 
-								prnerror (result, "coalesced MPI_Send error:");
-*/
+							MPI_Waitall (ppn/streams-1, noderecvreq, noderecvst);	// cores 1 - ppn/2-1
 						}
 
-/*
-						if (coreID == ppn/2) { 
-							result = MPI_Send (dataPerNode, count*ppn/2, MPI_DOUBLE, 0, coreID, MPI_COMM_NODE);	
-							if (result != MPI_SUCCESS) 
-								prnerror (result, "coalesced MPI_Send error:");
-						}
-						else if (coreID == 0) { 
-							MPI_Status st;	
-							result = MPI_Recv (dataPerNode+count*ppn/2, count*ppn/2, MPI_DOUBLE, ppn/2, ppn/2, MPI_COMM_NODE, &st);
-							if (result != MPI_SUCCESS) 
-								prnerror (result, "coalesced MPI_Recv error:");
+/*						else if (coreID == ppn/streams) {
+							dataPerNode[0] = *(datum->getAlphaBuffer());
+							for (int i=coreID+1; i<coreID+ppn/streams; i++) {
+								int j = i - coreID; // ppn/streams;
+								MPI_Irecv (dataPerNode+count*j, count, MPI_DOUBLE, i, i, MPI_COMM_NODE, &noderecvreq[j-1]);
+							}
+							MPI_Waitall (ppn/streams-1, noderecvreq, noderecvst);	// cores 1 - ppn/2-1
 						}
 */
+					//	if (coreID % (ppn/streams) == 0 && nodeID < 3) {
+					//		int start = coreID+1, end = coreID + ppn/streams;
+					//		printf("%d %d %d %d\n", myrank, start, end, coreID/(ppn/streams));
+					//	}
 					}
 // end - trying 2 collectors instead of just core 0
 
@@ -241,24 +223,21 @@ int writeFile(dataBlock *datum, int count, int all) {
 #endif
 
 					int datalen = count * ppn;
-					//if(streams >= 2) datalen /= streams;
-					if(streams == 2) datalen /= 2;
-					//if (streams >= 2 && coreID % (ppn/streams) == 0) {				
-	
+					if(streams >= 2) datalen /= streams;
+					//if(streams == 2) datalen /= 2;
 
-					//only core 0 sends
-					if (coreID == 0) {
+					//only core 0 sends in the case of 1 stream
+					//if (coreID == 0) {
+					if (streams < 2 && coreID == 0) {
 						//result = MPI_Send (dataPerNode, datalen, MPI_DOUBLE, myBridgeRank, myrank, MPI_COMM_WORLD); //, &sendreq);	
 						result = MPI_Isend (dataPerNode, datalen, MPI_DOUBLE, myBridgeRank, myrank, MPI_COMM_WORLD, &sendreq);	
 						if (result != MPI_SUCCESS) 
 							prnerror (result, "coalesced nonBN node core 0 MPI_Isend error:");
 						MPI_Wait (&sendreq, &sendst);
-					//	printf("%d got\n", myrank);
-					//	fflush(stdout);
 					}
 
-					//additionally, core ppn/2 sends
-					if (streams == 2 && coreID == ppn/2) {
+					//additional cores send
+					else if (streams >= 2 && coreID % (ppn/streams) == 0) {
 						result = MPI_Isend (dataPerNode, datalen, MPI_DOUBLE, myBridgeRank, myrank, MPI_COMM_WORLD, &sendreq);	
 						if (result != MPI_SUCCESS) 
 							prnerror (result, "coalesced nonBN node core ppn/2 MPI_Isend error:");
@@ -438,33 +417,27 @@ int writeFile(dataBlock *datum, int count, int all) {
 void getData(int myWeight) {
 
 	int datalen = count * ppn;
-	if(streams == 2) datalen /= 2;
+	if(streams >= 2) datalen /= streams;
 
 	int idx, result;
 
-	if (coreID == 0) {
+	if (streams <2 && coreID == 0) {
 		for (int i=0; i<myWeight ; i++) { 
 			assert(shuffledNodesData);
 			assert(shuffledNodesData[i]);
 			assert(shuffledNodes);
-
+			MPI_Irecv (shuffledNodesData[i], datalen, MPI_DOUBLE, shuffledNodes[i], shuffledNodes[i], MPI_COMM_WORLD, &req[i]);				
 #ifdef DEBUG
 			printf("\n%d: myWeight = %d shuffledNodes[%d] = %d\n\n", myrank, myWeight, i, shuffledNodes[i]);
 #endif
-
-			//MPI_Irecv (shuffledNodesData[i], datalen, MPI_DOUBLE, shuffledNodes[i], myrank, MPI_COMM_WORLD, &req[i]);				
-			MPI_Irecv (shuffledNodesData[i], datalen, MPI_DOUBLE, shuffledNodes[i], shuffledNodes[i], MPI_COMM_WORLD, &req[i]);				
 		}
 
 //#pragma omp parallel for
 		for (int i=0; i<myWeight ; i++) {
-
 			MPI_Waitany (myWeight, req, &idx, &stat);
-
 #ifdef DEBUG
 			printf ("BN %d received data from %d\n", myrank, shuffledNodes[idx]);
 #endif
-
 			if (blocking == 1) 
 				result = MPI_File_write_at (fileHandle, (MPI_Offset)shuffledNodes[idx]*count*sizeof(double), shuffledNodesData[idx], datalen, MPI_DOUBLE, &status);
 			else 
@@ -479,45 +452,37 @@ void getData(int myWeight) {
 			//MPI_Waitall (myWeight+1, wrequest, wstatus);
 	}
 
-	//Additionally, use ppn/2 th core for writing: concurrent network flows!!
-	if (streams == 2) {
-	
-		if (coreID == ppn/2) {
+	//Additionally, use additional cores for writing: concurrent network flows!
+	else if (streams >= 2 && coreID%(ppn/streams) == 0) {
 			
-			for (int i=0; i<myWeight ; i++) { 
-
-				assert(shuffledNodesData);
-				assert(shuffledNodesData[i]);
-				assert(shuffledNodes);
+		for (int i=0; i<myWeight ; i++) { 
+			assert(shuffledNodesData);
+			assert(shuffledNodesData[i]);
+			assert(shuffledNodes);
+			MPI_Irecv (shuffledNodesData[i], datalen, MPI_DOUBLE, shuffledNodes[i], shuffledNodes[i], MPI_COMM_WORLD, &req[i]);				
 #ifdef DEBUG
-				printf("\n%d: myWeight = %d shuffledNodes[%d] = %d\n\n", myrank, myWeight, i, shuffledNodes[i]);
+			printf("\n%d: myWeight = %d shuffledNodes[%d] = %d\n\n", myrank, myWeight, i, shuffledNodes[i]);
 #endif
-				MPI_Irecv (shuffledNodesData[i], datalen, MPI_DOUBLE, shuffledNodes[i], shuffledNodes[i], MPI_COMM_WORLD, &req[i]);				
-			}
-
-//#pragma omp parallel for
-			for (int i=0; i<myWeight ; i++) {
-
-				MPI_Waitany (myWeight, req, &idx, &stat);
-#ifdef DEBUG
-				printf ("BN %d received data from %d\n", myrank, shuffledNodes[idx]);
-#endif
-
-				if (blocking == 1) 
-					result = MPI_File_write_at (fileHandle, (MPI_Offset)shuffledNodes[idx]*count*sizeof(double), shuffledNodesData[idx], datalen, MPI_DOUBLE, &status);
-				else 
-					result = MPI_File_iwrite_at (fileHandle, (MPI_Offset)shuffledNodes[idx]*count*sizeof(double), shuffledNodesData[idx], datalen, MPI_DOUBLE, &wrequest[idx]);
-				
-				if (result != MPI_SUCCESS) 
-					prnerror (result, "BN for nonBN MPI_File_write_at Error:");
-			}
-
-			if (blocking == 0) 
-				MPI_Waitall (myWeight, wrequest, wstatus);
-				//MPI_Waitall (myWeight+1, wrequest, wstatus);
-	
 		}
 
+//#pragma omp parallel for
+		for (int i=0; i<myWeight ; i++) {
+			MPI_Waitany (myWeight, req, &idx, &stat);
+#ifdef DEBUG
+			printf ("BN %d received data from %d\n", myrank, shuffledNodes[idx]);
+#endif
+			if (blocking == 1) 
+				result = MPI_File_write_at (fileHandle, (MPI_Offset)shuffledNodes[idx]*count*sizeof(double), shuffledNodesData[idx], datalen, MPI_DOUBLE, &status);
+			else 
+				result = MPI_File_iwrite_at (fileHandle, (MPI_Offset)shuffledNodes[idx]*count*sizeof(double), shuffledNodesData[idx], datalen, MPI_DOUBLE, &wrequest[idx]);
+			
+			if (result != MPI_SUCCESS) 
+				prnerror (result, "BN for nonBN MPI_File_write_at Error:");
+		}
+
+		if (blocking == 0) 
+			MPI_Waitall (myWeight, wrequest, wstatus);
+			//MPI_Waitall (myWeight+1, wrequest, wstatus);
 	}
 
 	//all cores on BN wait for their own data
@@ -1225,9 +1190,9 @@ void distributeInfo() {
 		if (coalesced == 1) {
 
 			int datalen = count * ppn;
-			if(streams == 2) datalen /= 2;
+			if(streams >= 2) datalen /= streams;
 
-			if (coreID == 0) { 
+			if ((streams < 2 && coreID == 0 ) || (streams >=2 && coreID%(ppn/streams)==0)) { 
 				for (int i=0; i<myWeight; i++) {
 					shuffledNodesData[i] = (double *) malloc (datalen * sizeof(double));
 					if (shuffledNodesData[i] == NULL) printf("\n%d: Error in allocating %ld bytes for %d\n", myrank, datalen * sizeof (double) ,  i);
@@ -1236,12 +1201,14 @@ void distributeInfo() {
 				printf ("%d: allocated %d * %d bytes\n", myrank, myWeight, datalen);
 #endif
 			}
+/*
 			if (streams == 2 && coreID == ppn/2) {
 				for (int i=0; i<myWeight; i++) {
 					shuffledNodesData[i] = (double *) malloc (datalen * sizeof(double));
 					if (shuffledNodesData[i] == NULL) printf("\n%d: Error in allocating %ld bytes for %d\n", myrank, datalen * sizeof (double) ,  i);
 				}
 			}
+*/
 
 		}
 		else
@@ -1416,9 +1383,9 @@ int main (int argc, char **argv) {
 
 		if (coalesced == 1 && streams < 2)
 			maxWeight = memAvail/(2 * count * ppn * sizeof(double));
-		else if (coalesced == 1 && streams == 2)
-			//maxWeight = (memAvail * (ppn/streams)) / (2 * count * ppn * sizeof(double));
+		else if (coalesced == 1 && streams >= 2)
 			maxWeight = memAvail / (2 * count * (ppn/streams) * sizeof(double));
+			//maxWeight = (memAvail * (ppn/streams)) / (2 * count * ppn * sizeof(double));
 			//maxWeight = (memAvail) / (count * ppn * sizeof(double));
 		else
 			maxWeight = 1000;	//high
@@ -1472,7 +1439,6 @@ int main (int argc, char **argv) {
 					printf("%d: allocation error for %ld bytes\n", myrank, count*ppn*sizeof(double));
 			}
 			else if (streams >= 2 && coreID % (ppn/streams) == 0) {
-				// (coreID == 0 || coreID == ppn/2)) 		//FIXME
 				dataPerNode = (double *) malloc (count * ppn/streams * sizeof(double));
 				if (dataPerNode == NULL) 	
 					printf("%d: allocation error for %ld bytes\n", myrank, count*ppn*sizeof(double)/streams);
