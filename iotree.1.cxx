@@ -60,7 +60,7 @@ MPI_Comm COMM_BRIDGE_NODES, COMM_BRIDGE_NODES_core;
 #ifdef CETUS
 int BAG = 256;
 #else
-int BAG = 128; // 64;
+int BAG = 64;
 #endif
 
 //Average load per BN
@@ -88,7 +88,7 @@ int streams;	//0 = use gather, 1=1 core collects, 2 = core 0 and core ppn/2 coll
 
 int count; 
 
-double tstart, tend, tend_ION;
+double tstart, tend;
 double Tmax, Tmin, Tmax_test2;
 
 MPI_Request *req, *wrequest; //req[myWeight], wrequest[myWeight+1];
@@ -236,15 +236,11 @@ int writeFile(dataBlock *datum, int count, int all) {
 
 #ifdef DEBUG
 					t = MPI_Wtime() - t;
-					//if (coreID == 0 || coreID == ppn/2) printf ("%d: %d my BN %lf seconds\n", myrank, myBridgeRank, t);
-					if (coreID % (ppn/streams) == 0) printf ("%d: %d my BN %lf seconds\n", myrank, myBridgeRank, t);
+					if (coreID == 0 || coreID == ppn/2) printf ("%d: %d my BN %lf seconds\n", myrank, myBridgeRank, t);
 #endif
 
 					int datalen = count * ppn;
-					//if(streams >= 2) datalen /= streams;
 					if(streams == 2) datalen /= 2;
-					//if (streams >= 2 && coreID % (ppn/streams) == 0) {				
-	
 
 					//only core 0 sends
 					if (coreID == 0) {
@@ -674,8 +670,7 @@ void traverse (int index, int level) {
 		nid = node->getNodeId(), rid=node->getRootId();
 
 #ifdef DEBUG
-		if (myrank == bridgeRanks[0]) 
-			printf ("%d: nid %d lastCount %d nChildren %d\n", myrank, nid, lastCount, nChildren);
+		printf ("%d: nid %d lastCount %d nChildren %d\n", myrank, nid, lastCount, nChildren);
 #endif
 		for (i=0; i<nChildren; i++) {
 
@@ -686,8 +681,7 @@ void traverse (int index, int level) {
 			child = node->getChildId(i);
 			depth = (node->getChild(i))->getDepth();
 #ifdef DEBUG
-			if (myrank == bridgeRanks[0]) 
-				printf ("%d: child %d depth %d i %d\n", myrank, child, depth, i);
+			printf ("%d: child %d depth %d i %d\n", myrank, child, depth, i);
 #endif
 
 #ifdef DEBUG
@@ -702,36 +696,29 @@ void traverse (int index, int level) {
 
 				int childIdx = child % midplane;
 #ifdef DEBUG
-				if (myrank == bridgeRanks[0]) 
 				printf("%d process child %d %d\n", myrank, child, childIdx);
 #endif
-
 			 	newBridgeNode[childIdx] = -1;//index;
-				newDepth = bridgeNodeAll[childIdx*2+1]; 
-				//newDepth = bridgeNodeAll[childIdx*2+1] - 1; //254; //depth;		// bug fix?
+				//newDepth = bridgeNodeAll[child*2+1]; //<--- major bug fixed
+				newDepth = bridgeNodeAll[childIdx*2+1]; //254; //depth;
 
 				for (bn=0; bn<numBridgeNodes ; bn++) {
 				
 #ifdef DEBUG
-					if (myrank == bridgeRanks[0]) printf("%d: %d: currentAvg %4.2f currentSum %4.2f avgWeight[%d]=%4.2f\n", myrank, child, currentAvg, currentSum, bn, avgWeight[bn]);
+					printf("%d: %d: currentAvg %4.2f currentSum %4.2f avgWeight[%d]=%4.2f\n", myrank, child, currentAvg, currentSum, bn, avgWeight[bn]);
 #endif
-
 				 	if (avgWeight[bn] > currentAvg) {
-
 #ifdef DEBUG
-						printf("%d: not assigning %d to %d (%d--%d) to balance\n", myrank, child, bridgeRanks[bn], depthInfo[bn][child], newDepth);
+						printf("%d: not assigning %d to %d (%d) to balance\n", myrank, child, bridgeRanks[bn], depthInfo[bn][child]);
 #endif
 						continue;
 				 	}
-
 					//TODO check revisit is true or not
 #ifdef DEBUG
 					printf ("%d: was this node %d marked %d\n", myrank, child, revisit[child][0]);
 #endif
-
 					//if (revisit[child][0] == 1)	
-				 	//if (depthInfo[bn][child] < newDepth && avgWeight[bn] < maxWeight-1) {
-				 	if (depthInfo[bn][child] < newDepth && avgWeight[bn] < maxWeight-1 && bridgeRanks[bn] != bridgeNodeAll[childIdx*2]*ppn) {
+				 	if (depthInfo[bn][child] < newDepth && avgWeight[bn] < maxWeight-1) {//TODO fixme : based on mem
 						newBridgeNode[childIdx] = bn;
 					 	newDepth = depthInfo[bn][child];
 #ifdef DEBUG
@@ -841,7 +828,7 @@ void expandNode (Node *currentNodePtr) {
 
 				//resolve distance metric later
 				if(bridgeNodeAll[localNode_*2+1] > currDepth+1) {
-					revisit[localNode_][0] = 1;// mark - to be visited later
+					revisit[localNode][0] = 1;// mark - to be visited later
 #ifdef DEBUG
 					printf("%d: %d: can change the depth for %d from %d to %d\n", myrank, bridgeRanks[bridgeNodeCurrIdx], localNode, bridgeNodeAll[localNode_*2+1], currDepth);
 #endif
@@ -872,17 +859,13 @@ void expandNode (Node *currentNodePtr) {
 #endif
 
 	if (numNodes > BAG) {
-
 	//	numNodes = 0;
-	
-		//no more expansion for this node
+		//no more expansion for this node?
 		while(!nodeList.empty())	nodeList.pop();	
-
 #ifdef DEBUG
-		if (myrank == bridgeRanks[bridgeNodeCurrIdx]) 
+	if (myrank == bridgeRanks[bridgeNodeCurrIdx]) 
 		printf("%d: queue size %d\n", myrank, nodeList.size());
 #endif
-
 		return;
 	}
 	else {
@@ -947,8 +930,8 @@ void formBridgeNodesRoutes () {
 		MPI_Request request[numBridgeNodes], requestAll[numBridgeNodes];
 		MPI_Status status[numBridgeNodes], statusAll[numBridgeNodes];
 
-#ifdef DEBUG
 		printf("I am the rootps %d\n", myrank);
+#ifdef DEBUG
 #endif
 
 		tStart = MPI_Wtime();
@@ -963,21 +946,22 @@ void formBridgeNodesRoutes () {
 		if (result != MPI_SUCCESS) 
 			prnerror (result, "MPI_Waitall Error: ");
 		
-		int tag = rootps + 1, tagAll = rootps + 2;
 	  for (i=0; i<numBridgeNodes ; i++) {
 		
-#ifdef DEBUG
 			printf("%d sends to BN[%d] %d\n", myrank, i, bridgeRanks[i]);
+#ifdef DEBUG
 #endif
 			//Introduce all bridge nodes to each other
+			int tag = rootps + 1;
 			result = MPI_Isend (bridgeRanks, numBridgeNodes, MPI_INT, bridgeRanks[i], tag, MPI_COMM_WORLD, &request[i]);
 			//result = MPI_Isend (bridgeRanks, numBridgeNodes, MPI_INT, bridgeRanks[i], tag, MPI_COMM_MIDPLANE, &request[i]);
 			if (result != MPI_SUCCESS) 
 				prnerror (result, "MPI_Isend Error: ");
 
 			//Processes on same node by default have the same bridge node
-			result = MPI_Isend (bridgeNodeAll, 2*midplane, MPI_INT, bridgeRanks[i], tagAll, MPI_COMM_WORLD, &requestAll[i]);
-			//result = MPI_Isend (bridgeNodeAll, 2*midplane, MPI_INT, bridgeRanks[i], tagAll, MPI_COMM_MIDPLANE, &requestAll[i]);
+			tag = rootps + 2;
+			result = MPI_Isend (bridgeNodeAll, 2*midplane, MPI_INT, bridgeRanks[i], tag, MPI_COMM_WORLD, &requestAll[i]);
+			//result = MPI_Isend (bridgeNodeAll, 2*midplane, MPI_INT, bridgeRanks[i], tag, MPI_COMM_MIDPLANE, &requestAll[i]);
 			if (result != MPI_SUCCESS) 
 				prnerror (result, "MPI_Isend Error: ");
 		}
@@ -991,10 +975,8 @@ void formBridgeNodesRoutes () {
 			prnerror (result, "MPI_Waitall Error: ");
 
 		tEnd = MPI_Wtime();
-
 #ifdef DEBUG
 		printf("%d: send recv overhead in rootps process %6.3f\n", myrank, tEnd-tStart);
-		printf("%d: about to recv newBridgeNode from %d\n", myrank, bridgeRanks[0]);
 #endif
 
 		MPI_Status st;	
@@ -1005,8 +987,8 @@ void formBridgeNodesRoutes () {
 	//process on Bridge node core 0
 	if (bridgeNodeInfo[1] == 1 && coreID == 0) {
 
-#ifdef DEBUG
 		printf("%d am the BN on core %d\n", myrank, coreID); 
+#ifdef DEBUG
 #endif
 
 		MPI_Request requestSend, requestRecv, requestRecvAll;
@@ -1024,24 +1006,22 @@ void formBridgeNodesRoutes () {
 		if (result != MPI_SUCCESS) 
 			prnerror (result, "MPI_Waitall Error: ");
 
-		int tag = rootps + 1, tagAll = rootps + 2;
+		int tag = rootps + 1;
 		result = MPI_Irecv (bridgeRanks, numBridgeNodes, MPI_INT, rootps, tag, MPI_COMM_WORLD, &requestRecv);
 		//result = MPI_Irecv (bridgeRanks, numBridgeNodes, MPI_INT, 0, tag, MPI_COMM_MIDPLANE, &requestRecv);
 		if (result != MPI_SUCCESS) 
 			prnerror (result, "MPI_Irecv Error: ");
 
-		result = MPI_Irecv (bridgeNodeAll, 2*midplane, MPI_INT, rootps, tagAll, MPI_COMM_WORLD, &requestRecvAll);
-		//result = MPI_Irecv (bridgeNodeAll, 2*midplane, MPI_INT, 0, tagAll, MPI_COMM_MIDPLANE, &requestRecvAll);
+		tag = rootps + 2;
+		result = MPI_Irecv (bridgeNodeAll, 2*midplane, MPI_INT, rootps, tag, MPI_COMM_WORLD, &requestRecvAll);
+		//result = MPI_Irecv (bridgeNodeAll, 2*midplane, MPI_INT, 0, tag, MPI_COMM_MIDPLANE, &requestRecvAll);
 		if (result != MPI_SUCCESS) 
 			prnerror (result, "MPI_Irecv Error: ");
 
-		//printf("%d: debugging %6.3f\n", myrank, tStart);
 
 		result = MPI_Wait(&requestRecv, &statusRecv);
 		if (result != MPI_SUCCESS) 
 			prnerror (result, "MPI_Waitall Error: ");
-
-		//printf("%d: debugging wait %6.3f\n", myrank, tStart);
 
 		result = MPI_Wait(&requestRecvAll, &statusRecvAll);
 		if (result != MPI_SUCCESS) 
@@ -1085,14 +1065,13 @@ void formBridgeNodesRoutes () {
 
 			numNodes=0;
 
-#ifdef DEBUG
 			printf("%d: building for #%d %d\n", myrank, bridgeNodeCurrIdx, bridgeRanks[bridgeNodeCurrIdx]);
+#ifdef DEBUG
 #endif
 			buildTree(bridgeRanks[bridgeNodeCurrIdx]);
 		}
 
 		tEnd = MPI_Wtime();
-
 #ifdef DEBUG
 		printf("%d: buildTree overhead %6.3f\n", myrank, tEnd-tStart);
 #endif
@@ -1131,9 +1110,8 @@ void formBridgeNodesRoutes () {
 
 #ifdef DEBUG
 		for (j=0; j<midplane; j++) 
-			if (newBridgeNode[j] >= 0 && myrank == bridgeRanks[newBridgeNode[j]] && depthInfo[newBridgeNode[j]][j] != 255)
-			  printf("%d: %d %d is new BN for %d prev %d %d difference %d\n", myrank, bridgeRanks[newBridgeNode[j]], depthInfo[newBridgeNode[j]][j], j, bridgeNodeAll[j*2], bridgeNodeAll[j*2+1], bridgeNodeAll[j*2+1]-depthInfo[newBridgeNode[j]][j] );
-// 				printf("%d: %d (%d) is the new BN for %d at distance %d %d\n", myrank, bridgeRanks[newBridgeNode[j]], newBridgeNode[j], j, bridgeNodeAll[j*2+1], depthInfo[newBridgeNode[j]][j]);
+			if (newBridgeNode[j] >= 0 && myrank == bridgeRanks[newBridgeNode[j]])
+				printf("%d: %d (%d) is the new BN for %d at distance %d %d\n", myrank, bridgeRanks[newBridgeNode[j]], newBridgeNode[j], j, bridgeNodeAll[j*2+1], depthInfo[newBridgeNode[j]][j]);
 #endif
 
 		for (bn=0; bn<numBridgeNodes ; bn++) 
@@ -1141,12 +1119,8 @@ void formBridgeNodesRoutes () {
 
 		MPI_Request bnreq;
 		MPI_Status bnst;
-	  if (myrank == bridgeRanks[0]) {
+	  	if (myrank == bridgeRanks[0]) {
 			MPI_Send(newBridgeNode, midplane, MPI_INT, rootps, bridgeRanks[0], MPI_COMM_WORLD);	
-#ifdef DEBUG
-			printf("%d sending newBridgeNode to %d, myWeight = %d\n", myrank, rootps, myWeight);
-#endif
-
 			//MPI_Isend(newBridgeNode, midplane, MPI_INT, 0, bridgeRanks[0], MPI_COMM_MIDPLANE, &bnreq);	
 			//MPI_Wait (&bnreq, &bnst);
 		}
@@ -1175,15 +1149,15 @@ void distributeInfo() {
 
 	int j;
 
-#ifdef DEBUG
 		printf ("\n%d:%d:%d: distribute weight = %d\n", myrank, coreID, nodeID, myWeight);
+#ifdef DEBUG
 #endif
 
 		MPI_Bcast(&myWeight, ppn, MPI_INT, 0, MPI_COMM_NODE);	
 		MPI_Bcast(bridgeNodeAll, 2*midplane, MPI_INT, 0, MPI_COMM_NODE);	
 
-#ifdef DEBUG
 		printf ("\n%d:%d:%d: real weight = %d\n", myrank, coreID, nodeID, myWeight);
+#ifdef DEBUG
 #endif
 
 		shuffledNodes = (int *) malloc (myWeight * sizeof(int));
@@ -1193,7 +1167,6 @@ void distributeInfo() {
 
 		int k=-1;
 		for (j=0; j<midplane; j=j+ppn) { 
-
 #ifdef DEBUG
 			if (newBridgeNode[j] >= 0) 
 				printf ("%d: checking: %d %d %d %d %d\n", myrank, nodeID, coreID, j, bridgeRanks[newBridgeNode[j]], bridgeNodeAll[j*2+1]);
@@ -1203,11 +1176,9 @@ void distributeInfo() {
 			{
 				k++;
 				shuffledNodes[k] = lb + j + coreID;
-
-#ifdef DEBUG
 				printf("%d:(%d,%d) k=%d newBridgeNode[%d]=%d bn=%d %d\n", myrank, nodeID, coreID, k, j, newBridgeNode[j], bridgeRanks[newBridgeNode[j]], shuffledNodes[k]); 
+#ifdef DEBUG
 #endif
-
 			}
 		}
 
@@ -1257,9 +1228,7 @@ void distributeInfo() {
 
 		MPI_Barrier (COMM_BRIDGE_NODES);	
 
-#ifdef DEBUG
 		printf ("\n%d:%d:%d: myWeight = %d\n", myrank, coreID, nodeID, myWeight);
-#endif
 }
 
 void initTree(int n) {
@@ -1310,15 +1279,14 @@ int main (int argc, char **argv) {
 			numBridgeNodes = 32;		
 		else if (numMPInodes == 8192)
 			numBridgeNodes = 64;		
-
-		//BAG = 2 * numMPInodes/numBridgeNodes;
-		//BAG = numMPInodes/numBridgeNodes;
 #else
 	//	if (numMPInodes == 512)
 			numBridgeNodes = 32; 	//vesta
 	//	if (numMPInodes == 1024)
 	//		numBridgeNodes = 64;	
 #endif
+
+		BAG = 2 * numMPInodes/numBridgeNodes;
 
 #ifdef DEBUG
 		if (myrank == 0 || myrank == 1) getMemStats(myrank, 1);
@@ -1353,8 +1321,8 @@ int main (int argc, char **argv) {
 
 		numMidplanes = (commsize/ppn) / midplane;
 
-#ifdef DEBUG
 		if (coreID == 0) printf("Logistics: %d:%d:%d: %d %d %d %d %d\n", myrank, nodeID, coreID, lb, ub, rootps, midplane, BAG);
+#ifdef DEBUG
 #endif
 
 		double tStart = MPI_Wtime();	//entire execution
@@ -1414,18 +1382,13 @@ int main (int argc, char **argv) {
 		MPI_Reduce(&heapAvail, &memAvail, 1, MPI_UINT64_T, MPI_MIN, 0, MPI_COMM_NODE);
 		MPI_Bcast(&memAvail, 1, MPI_UINT64_T, 0, MPI_COMM_NODE);	
 
-		if (coalesced == 1 && streams < 2)
+		if (coalesced == 1)
 			maxWeight = memAvail/(2 * count * ppn * sizeof(double));
-		else if (coalesced == 1 && streams == 2)
-			//maxWeight = (memAvail * (ppn/streams)) / (2 * count * ppn * sizeof(double));
-			maxWeight = memAvail / (2 * count * (ppn/streams) * sizeof(double));
-			//maxWeight = (memAvail) / (count * ppn * sizeof(double));
 		else
 			maxWeight = 1000;	//high
 
 #ifdef DEBUG
-		if (nodeID < 2 && coreID == 0) 
-		printf("%d maxWeight = %d count = %d memAvail = %u\n", myrank, maxWeight, count, memAvail);
+		if (nodeID < 60 && coreID < 2) printf("%d maxWeight = %d heapAvail = %d memAvail = %d\n", myrank, maxWeight, heapAvail, memAvail);
 #endif
 
 		if (coreID == 0) formBridgeNodesRoutes ();
@@ -1456,30 +1419,14 @@ int main (int argc, char **argv) {
 		 * * * * * * * * * * * * Independent MPI-IO to IO nodes from all compute nodes - shared file * * * * * * * * * *
 		 */
 
-/*
 		// combine data from all ranks in the node
 		if (coalesced == 1 && (coreID == 0 || coreID == ppn/2)) {		//FIXME
 			//dataPerNode = new double[count*ppn];		//why does this err?
 			dataPerNode = (double *) malloc (count * ppn * sizeof(double));
 			if (dataPerNode == NULL) printf("%d: allocation error for %ld bytes\n", myrank, count*ppn*sizeof(double));
 		}
-*/
 
-		if (coalesced == 1) {
-			if (streams < 2 && coreID == 0) {
-				dataPerNode = (double *) malloc (count * ppn * sizeof(double));
-				if (dataPerNode == NULL) 	
-					printf("%d: allocation error for %ld bytes\n", myrank, count*ppn*sizeof(double));
-			}
-			else if (streams >= 2 && coreID % (ppn/streams) == 0) {
-				// (coreID == 0 || coreID == ppn/2)) 		//FIXME
-				dataPerNode = (double *) malloc (count * ppn/streams * sizeof(double));
-				if (dataPerNode == NULL) 	
-					printf("%d: allocation error for %ld bytes\n", myrank, count*ppn*sizeof(double)/streams);
-			}
-		}
-
-		double tION[3];
+		double tION[2];
 
 		/* set file open mode */
 		mode = MPI_MODE_CREATE | MPI_MODE_RDWR; //WRONLY;
@@ -1498,8 +1445,7 @@ int main (int argc, char **argv) {
 		for (int i=1; i<=MAXTIMES; i++)
 			totalBytes[0][1] += writeFile(datum, count, 1);
 		tIOEnd = MPI_Wtime();
-		//tION[1] = (tIOEnd - tIOStart)/MAXTIMES;
-		tend_ION = (tIOEnd - tIOStart)/MAXTIMES;
+		tION[1] = (tIOEnd - tIOStart)/MAXTIMES;
 		MPI_File_close (&fileHandle);
 
 		}
@@ -1513,23 +1459,7 @@ int main (int argc, char **argv) {
 		for (int i=1; i<=MAXTIMES; i++)
 			totalBytes[0][0] += writeFile(datum, count, 0);
 		tIOEnd = MPI_Wtime();
-		//tION[0] = (tIOEnd - tIOStart)/MAXTIMES;
-		tend_ION = (tIOEnd - tIOStart)/MAXTIMES;
-		MPI_File_close (&fileHandle);
-
-		}
-
-		else if (type == 2) {
-	
-		MPI_File_open (MPI_COMM_WORLD, fileNameION, mode, MPI_INFO_NULL, &fileHandle);
-		for (int i=1; i<=SKIP; i++)
-			totalBytes[0][2] += writeFile(datum, count, 2);
-		tIOStart = MPI_Wtime();
-		for (int i=1; i<=MAXTIMES; i++)
-			totalBytes[0][2] += writeFile(datum, count, 2);
-		tIOEnd = MPI_Wtime();
-		//tION[2] = (tIOEnd - tIOStart)/MAXTIMES;
-		tend_ION = (tIOEnd - tIOStart)/MAXTIMES;
+		tION[0] = (tIOEnd - tIOStart)/MAXTIMES;
 		MPI_File_close (&fileHandle);
 
 		}
@@ -1599,15 +1529,12 @@ int main (int argc, char **argv) {
 		 free(shuffledNodesData);
 		}
 
-		double max[2];
+		double max[5];
 
 //just testing: turn these on
-		//MPI_Reduce(&tION[0], &max[0], 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-		//MPI_Reduce(&tION[1], &max[1], 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-		//MPI_Reduce(&tION[2], &max[2], 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-
-		MPI_Reduce(&tend_ION, &max[0], 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-		MPI_Reduce(&tend, &max[1], 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+		MPI_Reduce(&tION[0], &max[0], 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+		MPI_Reduce(&tION[1], &max[1], 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+		MPI_Reduce(&tend, &max[2], 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
 		MPI_Finalize ();
 
@@ -1616,34 +1543,24 @@ int main (int argc, char **argv) {
 #endif
 
 		if (myrank == 0) 
-			printf ("0: Times: %d: %d: %d: %d: %d | %d %d | %6.2f | %4.2lf %4.2lf\n", coalesced, blocking, type, streams, commsize, ppn, omp_get_num_threads(), 8.0*fileSize/1024.0, max[0], max[1]);
-			//printf ("0: Times: %d: %d: %d: %d | %d %d | %6.2f | %4.2lf %4.2lf\n", type, blocking, coalesced, commsize, ppn, omp_get_num_threads(), 8.0*fileSize/1024.0, max[0], max[1]);
-			//printf ("%d: Times: %d: %d: %d: %d | %d %d | %6.2f | %4.2lf %4.2lf\n", myrank, type, blocking, coalesced, commsize, ppn, omp_get_num_threads(), 8.0*fileSize/1024.0, tend_ION tend);
+			printf ("0: Times: %d: %d: %d: %d | %d %d | %6.2f | %4.2lf %4.2lf | %4.2lf\n", type, blocking, coalesced, commsize, ppn, omp_get_num_threads(), 8.0*fileSize/1024.0, max[0], max[1], max[2]);
+
+
+//			printf ("%d: Times: %d: %d: %d: %d | %d %d | %6.2f | %4.2lf %4.2lf | %4.2lf\n", myrank, type, blocking, coalesced, commsize, ppn, omp_get_num_threads(), 8.0*fileSize/1024.0, tION[0], tION[1], tend);
+
 
 		int index = (nodeID*ppn) % midplane ;
-		if (coreID == 0 && bridgeNodeInfo[1] == 1 && myrank == bridgeRanks[0]) 
-			printf ("\n%d:%d:%d: myWeight = %d\n", myrank, coreID, nodeID, myWeight);
-
-
-/*
- 		if (coreID == 0 && type == 1 && bridgeNodeInfo[0]*ppn == bridgeRanks[0] && bridgeRanks[0] < midplane) { 
-			printf("\ntype 1: %d %d %d %d\n", myrank, bridgeNodeInfo[0]*ppn, bridgeNodeInfo[1], bridgeRanks[0]);  
-			getPersonality (myrank, bridgeNodeInfo[0]*ppn);
-		}
-			//getPersonality (myrank, bridgeNodeAll[index*2]);
-  	else if (type == 0 && newBridgeNode[index]<1 && bridgeRanks[0] < midplane) {
-			printf("\ndebug: %d %d %d %d\n", coreID, bridgeNodeInfo[1], bridgeNodeInfo[0]*ppn, bridgeRanks[0]);  
+		if (type == 1) 
+			getPersonality (myrank, bridgeNodeAll[index*2]);
+		else {
 			if (coreID == 0 && bridgeNodeInfo[1] != 1 && newBridgeNode[index] != -1) { 
-			  printf("%d %d %d MyNewBN %d (%d) from %d (%d)\n", myrank, nodeID, ppn, bridgeRanks[newBridgeNode[index]], depthInfo[newBridgeNode[index]][index], bridgeNodeInfo[0]*ppn, bridgeNodeInfo[1]);
+				printf("%d %d %d MyNewBN %d %d\n", myrank, nodeID, ppn, bridgeRanks[newBridgeNode[index]], bridgeNodeAll[index*2]);
 				getPersonality (myrank, bridgeRanks[newBridgeNode[index]]);
 			}
-			else if (coreID == 0 && bridgeNodeInfo[1] != 1 && newBridgeNode[index] == -1 && bridgeNodeInfo[0]*ppn == bridgeRanks[0]) { 
-				printf("%d %d %d I write through BN %d (%d)\n", myrank, nodeID, ppn, bridgeNodeInfo[0]*ppn, bridgeNodeInfo[1]); //bridgeNodeAll[index*2+1]);
-				getPersonality (myrank, bridgeNodeInfo[0]*ppn);
-			}
-	  }
-
-*/
+			else if (coreID == 0 && bridgeNodeInfo[1] != 1 && newBridgeNode[index] == -1)  
+				printf("%d %d %d I do not have a new BN\n", myrank, nodeID, ppn);
+				getPersonality (myrank, bridgeNodeAll[index*2]);
+		}
 
 #ifdef STATS
     PrintCounts("NW", hNWSet, myrank);

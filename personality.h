@@ -52,6 +52,6 @@ extern int *routingOrder;
 extern uint64_t heapAvail;
 
 //Functions
-void getPersonality(int);
+void getPersonality(int, int);
 
 #endif
