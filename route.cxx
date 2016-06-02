@@ -2,12 +2,13 @@
 
 /*
  * Read the DCR registers to get the routing order 
- * [Thanks to Phil]
+ * The routing order depends on the partition in which the job runs
+ * [Thanks to Phil Heidelberger]
  *
- * getRoute function populates parameter ro with the routing order 
+ * getRoutingOrder() populates parameter ro with the routing order, viz.  
  * A=0 B=1 C=2 D=3 E=4
  *
- * Viz., for 512 nodes, ro = {0, 1, 2, 3, 4}
+ * Example, for 512 nodes on Mira, ro = {0, 1, 2, 3, 4}
  *
  */
 
@@ -55,3 +56,4 @@ int main (int argc, char *argv[]) {
   
 }
 */
+

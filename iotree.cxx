@@ -77,8 +77,8 @@ queue <Node *> *rootNodeList;	//[numBridgeNodes];
 
 Node **bridgeNodeRootList;
 
-int SKIP = 5;
-int MAXTIMES = 10;
+int SKIP = 1;
+int MAXTIMES = 5;
 int MAXTIMESD = 5;
 
 int coalesced;	//0=false, 1=true
@@ -154,11 +154,11 @@ int writeFile(dataBlock *datum, int count, int all) {
 					else if (streams == 1) {
 
 						if (coreID > 0) {
-							//result = MPI_Isend (datum->getAlphaBuffer(), count, MPI_DOUBLE, 0, coreID, MPI_COMM_NODE, &nodesendreq);	
-							result = MPI_Send (datum->getAlphaBuffer(), count, MPI_DOUBLE, 0, coreID, MPI_COMM_NODE);	
+							result = MPI_Isend (datum->getAlphaBuffer(), count, MPI_DOUBLE, 0, coreID, MPI_COMM_NODE, &nodesendreq);	
+							//result = MPI_Send (datum->getAlphaBuffer(), count, MPI_DOUBLE, 0, coreID, MPI_COMM_NODE);	
 							if (result != MPI_SUCCESS) 
 								prnerror (result, "coalesced nonBN node MPI_Isend error:");
-							//MPI_Wait (&nodesendreq, &nodesendst);
+							MPI_Wait (&nodesendreq, &nodesendst);
 						}
 
 						else if (coreID == 0) {
@@ -219,7 +219,7 @@ int writeFile(dataBlock *datum, int count, int all) {
 #ifdef DEBUG
 					t = MPI_Wtime() - t;
 					//if (coreID == 0 || coreID == ppn/2) printf ("%d: %d my BN %lf seconds\n", myrank, myBridgeRank, t);
-					if (coreID % (ppn/streams) == 0) printf ("%d: %d my BN %lf seconds\n", myrank, myBridgeRank, t);
+					if (nodeID < 2 && coreID % (ppn/streams) == 0) printf ("%d: %d my BN %lf seconds\n", myrank, myBridgeRank, t);
 #endif
 
 					int datalen = count * ppn;
@@ -1582,34 +1582,41 @@ int main (int argc, char **argv) {
 #endif
 
 		if (myrank == 0) 
-			printf ("0: Times: %d: %d: %d: %d: %d | %d %d | %6.2f | %4.2lf %4.2lf\n", coalesced, blocking, type, streams, commsize, ppn, omp_get_num_threads(), 8.0*fileSize/1024.0, max[0], max[1]);
-			//printf ("0: Times: %d: %d: %d: %d | %d %d | %6.2f | %4.2lf %4.2lf\n", type, blocking, coalesced, commsize, ppn, omp_get_num_threads(), 8.0*fileSize/1024.0, max[0], max[1]);
-			//printf ("%d: Times: %d: %d: %d: %d | %d %d | %6.2f | %4.2lf %4.2lf\n", myrank, type, blocking, coalesced, commsize, ppn, omp_get_num_threads(), 8.0*fileSize/1024.0, tend_ION tend);
+		 printf ("0: Times: %d: %d: %d: %d: %d | %d %d | %6.2f | %4.2lf %4.2lf\n", coalesced, blocking, type, streams, commsize, ppn, omp_get_num_threads(), 8.0*fileSize/1024.0, max[0], max[1]);
+
+		//printf ("%d: Times: %d: %d: %d: %d: %d | %d %d | %6.2f | %4.2lf %4.2lf\n", myrank, coalesced, blocking, type, streams, commsize, ppn, omp_get_num_threads(), 8.0*fileSize/1024.0, tend_ION, tend);
 
 		int index = (nodeID*ppn) % midplane ;
+
+		//if (coreID == 0 && bridgeNodeInfo[1] == 1 && myrank == bridgeRanks[0]) 
 		if (coreID == 0 && bridgeNodeInfo[1] == 1 && myrank == bridgeRanks[0]) 
 			printf ("\n%d:%d:%d: myWeight = %d\n", myrank, coreID, nodeID, myWeight);
 
-
 /*
- 		if (coreID == 0 && type == 1 && bridgeNodeInfo[0]*ppn == bridgeRanks[0] && bridgeRanks[0] < midplane) { 
-			printf("\ntype 1: %d %d %d %d\n", myrank, bridgeNodeInfo[0]*ppn, bridgeNodeInfo[1], bridgeRanks[0]);  
+		int idx = 7; //0
+
+ 		//if (coreID == 0 && type == 1 && bridgeNodeInfo[0]*ppn == bridgeRanks[idx] && bridgeRanks[idx] < midplane) { 
+ 		if (coreID == 0 && type == 1) { // && bridgeNodeInfo[0]*ppn == bridgeRanks[idx] && bridgeRanks[idx] < midplane) { 
+			printf("\ntype 1: %d %d %d %d\n", myrank, bridgeNodeInfo[0]*ppn, bridgeNodeInfo[1], bridgeRanks[idx]);  
 			getPersonality (myrank, bridgeNodeInfo[0]*ppn);
 		}
 			//getPersonality (myrank, bridgeNodeAll[index*2]);
-  	else if (type == 0 && newBridgeNode[index]<1 && bridgeRanks[0] < midplane) {
-			printf("\ndebug: %d %d %d %d\n", coreID, bridgeNodeInfo[1], bridgeNodeInfo[0]*ppn, bridgeRanks[0]);  
+  	//else if (type == 0 && newBridgeNode[index]<1 && bridgeRanks[idx] < midplane) {
+  	else if (type == 0) {
+			//printf("\ndebug: %d %d %d %d\n", coreID, bridgeNodeInfo[1], bridgeNodeInfo[0]*ppn, bridgeRanks[idx]);  
 			if (coreID == 0 && bridgeNodeInfo[1] != 1 && newBridgeNode[index] != -1) { 
 			  printf("%d %d %d MyNewBN %d (%d) from %d (%d)\n", myrank, nodeID, ppn, bridgeRanks[newBridgeNode[index]], depthInfo[newBridgeNode[index]][index], bridgeNodeInfo[0]*ppn, bridgeNodeInfo[1]);
 				getPersonality (myrank, bridgeRanks[newBridgeNode[index]]);
 			}
-			else if (coreID == 0 && bridgeNodeInfo[1] != 1 && newBridgeNode[index] == -1 && bridgeNodeInfo[0]*ppn == bridgeRanks[0]) { 
+			//else if (coreID == 0 && bridgeNodeInfo[1] != 1 && newBridgeNode[index] == -1 && bridgeNodeInfo[0]*ppn == bridgeRanks[idx]) { 
+			else if (coreID == 0 && bridgeNodeInfo[1] != 1 && newBridgeNode[index] == -1) { 
 				printf("%d %d %d I write through BN %d (%d)\n", myrank, nodeID, ppn, bridgeNodeInfo[0]*ppn, bridgeNodeInfo[1]); //bridgeNodeAll[index*2+1]);
 				getPersonality (myrank, bridgeNodeInfo[0]*ppn);
 			}
 	  }
 
 */
+
 
 #ifdef STATS
     PrintCounts("NW", hNWSet, myrank);

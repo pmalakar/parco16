@@ -3,7 +3,6 @@
 
 #include <stdio.h>
 #include <stdint.h>
-#include <math.h>
 #include <mpi.h>
 #include "hwi/include/bqc/nd_500_dcr.h"
 
