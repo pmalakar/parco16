@@ -7,8 +7,7 @@
 /* 
  * Size of midplane on BGQ
  */
-//extern const int MidplaneSize; 
-#define MidplaneSize 512
+extern const int MidplaneSize; 
 
 /*
  * Number of midplanes : Number of processes / MidplaneSize
