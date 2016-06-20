@@ -1,6 +1,7 @@
 #ifndef __personality__
 #define __personality__
 
+#include <mpix.h>
 #include <stdint.h>
 
 //Variables
