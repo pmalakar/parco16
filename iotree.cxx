@@ -30,9 +30,11 @@
 #include "personality.h"
 #include "iotree.h"
 
+#ifdef STATS
 ///projects/Performance/preeti/utils
 #include "mem.h"
 #include "hwcnt.h"
+#endif
 
 int rootps;
 int numBridgeNodes;
@@ -81,17 +83,17 @@ int MAXTIMES = 5;
 int MAXTIMESD = 5;
 
 int coalesced;	//0=false, 1=true
-int blocking;	//0=nonblocking, 1=blocking
-int type;	//0=optimized independent, 1=independent, 2=collective
-int streams;	//0 = use gather, 1=1 core collects, 2 = core 0 and core ppn/2 collects and send
+int blocking;		//0=nonblocking, 1=blocking
+int type;				//0=optimized independent, 1=independent, 2=collective
+int streams;		//0=use gather, 1=1 core collects, 2=2 core collects and sends (=2 streams), 4=4 streams
 
 int count; 
 
 double tstart, tend, tend_ION;
 double Tmax, Tmin, Tmax_test2;
 
-MPI_Request *req, *wrequest; //req[myWeight], wrequest[myWeight+1];
-MPI_Status stat, *wstatus; //stat, wstatus[myWeight+1];
+MPI_Request *req, *wrequest; 	//req[myWeight], wrequest[myWeight+1];
+MPI_Status stat, *wstatus; 		//stat, wstatus[myWeight+1];
 
 /*
  *  Independent MPI-IO
@@ -106,11 +108,11 @@ MPI_Status stat, *wstatus; //stat, wstatus[myWeight+1];
 
 int writeFile(dataBlock *datum, int count, int all) {
 
-	double start=0.0, end=0.0, test1=0.0, test2=0.0;
+	double start=0.0, end=0.0;
 	int nbytes=0, totalBytes=0, i;
 
-	MPI_Request sendreq, nodesendreq, noderecvreq[ppn-1];
-	MPI_Status sendst, nodesendst, noderecvst[ppn-1];
+	MPI_Request sendreq; //, nodesendreq, noderecvreq[ppn-1];
+	MPI_Status sendst; //, nodesendst, noderecvst[ppn-1];
 
 	int result;
 
@@ -119,145 +121,38 @@ int writeFile(dataBlock *datum, int count, int all) {
 
 #ifdef DEBUG
 	 	if (coreID == 0) 
-			printf("%d:%d: called writeFile: %d %d %d %d\n", myrank, coreID, newBridgeNode[myrank], bridgeRanks[newBridgeNode[myrank]], bridgeNodeInfo[0], bridgeNodeInfo[1]);
+			printf("%d:%d: called writeFile: %d %d %d %d\n", 
+      myrank, coreID, newBridgeNode[myrank], bridgeRanks[newBridgeNode[myrank]], bridgeNodeInfo[0], bridgeNodeInfo[1]);
 #endif
 
 		//If I am not a bridge node 
 		if (bridgeNodeInfo[1] > 1) {
 			//If I have been assigned a new bridge node 
-			  int index = (nodeID*ppn) % midplane ; 
-		  	if(newBridgeNode[index] != -1) {	
+			int index = (nodeID*ppn) % midplane ; 
+		  if(newBridgeNode[index] != -1) {	
 				int	myBridgeRank = bridgeRanks[newBridgeNode[index]] + coreID; 
+
 #ifdef DEBUG
 				printf("%d will send to %d\n", myrank, myBridgeRank);		
 #endif
 
-				if (coalesced == 1) {
+				//send parallel streams of data
+				if (coalesced == 1) 
+					coalesceData(datum, myBridgeRank);
 
-					if (coreID == 0) assert(dataPerNode); 
-					//if (dataPerNode == NULL) printf("allocation error at %d\n", myrank);
-
-					assert(datum->getAlphaBuffer());
-
-					double t = MPI_Wtime();
-
-//simple MPI_Gather at core 0
-					if (streams == 0) {
-
-						result = MPI_Gather (datum->getAlphaBuffer(), count, MPI_DOUBLE, dataPerNode, count, MPI_DOUBLE, 0, MPI_COMM_NODE);
-						if (result != MPI_SUCCESS) 
-								prnerror (result, "coalesced nonBN node MPI_Gather error:");
-					}
-
-/* replacing gather by p2p */
-					else if (streams == 1) {
-
-						if (coreID > 0) {
-							result = MPI_Isend (datum->getAlphaBuffer(), count, MPI_DOUBLE, 0, coreID, MPI_COMM_NODE, &nodesendreq);	
-							//result = MPI_Send (datum->getAlphaBuffer(), count, MPI_DOUBLE, 0, coreID, MPI_COMM_NODE);	
-							if (result != MPI_SUCCESS) 
-								prnerror (result, "coalesced nonBN node MPI_Isend error:");
-							MPI_Wait (&nodesendreq, &nodesendst);
-						}
-
-						else if (coreID == 0) {
-							dataPerNode[0] = *(datum->getAlphaBuffer());
-							for (int i=1; i<ppn; i++)
-								MPI_Irecv (dataPerNode+count*i, count, MPI_DOUBLE, i, i, MPI_COMM_NODE, &noderecvreq[i-1]);
-							MPI_Waitall (ppn-1, noderecvreq, noderecvst);
-						}
-					}
-/* end - replacing gather by p2p */
-
-// trying 2 collectors instead of just core 0
-					else if (streams >= 2) {
-
-						//Send data to collectors
-						//if (coreID != 0 && coreID != ppn/2) {
-						if (coreID%(ppn/streams) != 0) {
-							//if (coreID < ppn/2) collector = 0;
-							//else collector = ppn/2;
-							collector = (ppn/streams) * (coreID/(ppn/streams));
-							//printf ("%d (%d, %d) sends %d bytes to core %d on node %d\n", myrank, nodeID, coreID, count, collector, nodeID);
-							//result = MPI_Send (datum->getAlphaBuffer(), count, MPI_DOUBLE, collector, coreID, MPI_COMM_NODE);	
-							result = MPI_Isend (datum->getAlphaBuffer(), count, MPI_DOUBLE, collector, coreID, MPI_COMM_NODE, &nodesendreq);	
-							if (result != MPI_SUCCESS) 
-								prnerror (result, "coalesced nonBN node MPI_Isend error:");
-							MPI_Wait (&nodesendreq, &nodesendst);
-						}
-
-						//Receive data at collectors from senders in the node
-						//else if (coreID == 0) {
-						else if (coreID%(ppn/streams) == 0) {
-							int start = coreID+1, end = coreID + ppn/streams;
-							dataPerNode[0] = *(datum->getAlphaBuffer());
-							for (int i=start; i<end; i++) {
-								int j = i - coreID; // ppn/streams;
-								MPI_Irecv (dataPerNode+count*j, count, MPI_DOUBLE, i, i, MPI_COMM_NODE, &noderecvreq[j-1]);
-								//MPI_Irecv (dataPerNode+count*i, count, MPI_DOUBLE, i, i, MPI_COMM_NODE, &noderecvreq[i-1]);
-							}
-							MPI_Waitall (ppn/streams-1, noderecvreq, noderecvst);	// cores 1 - ppn/2-1
-						}
-
-/*						else if (coreID == ppn/streams) {
-							dataPerNode[0] = *(datum->getAlphaBuffer());
-							for (int i=coreID+1; i<coreID+ppn/streams; i++) {
-								int j = i - coreID; // ppn/streams;
-								MPI_Irecv (dataPerNode+count*j, count, MPI_DOUBLE, i, i, MPI_COMM_NODE, &noderecvreq[j-1]);
-							}
-							MPI_Waitall (ppn/streams-1, noderecvreq, noderecvst);	// cores 1 - ppn/2-1
-						}
-*/
-					//	if (coreID % (ppn/streams) == 0 && nodeID < 3) {
-					//		int start = coreID+1, end = coreID + ppn/streams;
-					//		printf("%d %d %d %d\n", myrank, start, end, coreID/(ppn/streams));
-					//	}
-					}
-// end - trying 2 collectors instead of just core 0
-
-#ifdef DEBUG
-					t = MPI_Wtime() - t;
-					//if (coreID == 0 || coreID == ppn/2) printf ("%d: %d my BN %lf seconds\n", myrank, myBridgeRank, t);
-					if (nodeID < 2 && coreID % (ppn/streams) == 0) printf ("%d: %d my BN %lf seconds\n", myrank, myBridgeRank, t);
-#endif
-
-					int datalen = count * ppn;
-					if(streams >= 2) datalen /= streams;
-					//if(streams == 2) datalen /= 2;
-
-					//only core 0 sends in the case of 1 stream
-					//if (coreID == 0) {
-					if (streams < 2 && coreID == 0) {
-						//result = MPI_Send (dataPerNode, datalen, MPI_DOUBLE, myBridgeRank, myrank, MPI_COMM_WORLD); //, &sendreq);	
-						result = MPI_Isend (dataPerNode, datalen, MPI_DOUBLE, myBridgeRank, myrank, MPI_COMM_WORLD, &sendreq);	
-						if (result != MPI_SUCCESS) 
-							prnerror (result, "coalesced nonBN node core 0 MPI_Isend error:");
-						MPI_Wait (&sendreq, &sendst);
-					}
-
-					//additional cores send
-					else if (streams >= 2 && coreID % (ppn/streams) == 0) {
-						result = MPI_Isend (dataPerNode, datalen, MPI_DOUBLE, myBridgeRank, myrank, MPI_COMM_WORLD, &sendreq);	
-						if (result != MPI_SUCCESS) 
-							prnerror (result, "coalesced nonBN node core ppn/2 MPI_Isend error:");
-						MPI_Wait (&sendreq, &sendst);
-					}
-
-				}
 				//no coalescing
 				else {
 					MPI_Isend (datum->getAlphaBuffer(), count, MPI_DOUBLE, myBridgeRank, myBridgeRank, MPI_COMM_WORLD, &sendreq);	
 					MPI_Wait (&sendreq, &sendst);
 			
 #ifdef DEBUG
-			  		printf("%d sent to %d\n", myrank, bridgeRanks[newBridgeNode[myrank]]);
+			 		printf("%d sent to %d\n", myrank, bridgeRanks[newBridgeNode[myrank]]);
 #endif
 				}
-
-		  	}
+		  }
 
 			//If I have not been assigned a new bridge node, write 
-		  	else {
+		  else {
 #ifdef DEBUG
 				if (coreID == 0) printf("%d will write %d doubles\n", myrank, count);
 #endif
@@ -276,7 +171,7 @@ int writeFile(dataBlock *datum, int count, int all) {
 #ifdef DEBUG
 			  	printf("%d wrote directly, BN was %d at dist %d\n", myrank, bridgeNodeInfo[0], bridgeNodeInfo[1]);
 #endif
-		  	}
+		  }
 		}
 		//If I am a bridge node, receive data from the new senders
 		else if (bridgeNodeInfo[1] == 1) {
@@ -412,6 +307,110 @@ int writeFile(dataBlock *datum, int count, int all) {
 		return totalBytes;
 }
 
+
+/*
+ * Form streams, combine data and send to the new bridge nodes
+ *
+ */ 
+
+void coalesceData(dataBlock *datum, int myBridgeRank) {
+
+	MPI_Request sendreq, nodesendreq, noderecvreq[ppn-1];
+	MPI_Status sendst, nodesendst, noderecvst[ppn-1];
+
+	int result;
+
+	if (coreID == 0) assert(dataPerNode); 
+	assert(datum->getAlphaBuffer());
+
+#ifdef DEBUG
+	double t = MPI_Wtime();
+#endif
+
+	//simple MPI_Gather at core 0
+	if (streams == 0) {
+
+		result = MPI_Gather (datum->getAlphaBuffer(), count, MPI_DOUBLE, dataPerNode, count, MPI_DOUBLE, 0, MPI_COMM_NODE);
+		if (result != MPI_SUCCESS) 
+			prnerror (result, "coalesced nonBN node MPI_Gather error:");
+	}
+
+	/* replacing gather by p2p */
+	else if (streams == 1) {
+
+		if (coreID > 0) {
+			result = MPI_Isend (datum->getAlphaBuffer(), count, MPI_DOUBLE, 0, coreID, MPI_COMM_NODE, &nodesendreq);	
+			//result = MPI_Send (datum->getAlphaBuffer(), count, MPI_DOUBLE, 0, coreID, MPI_COMM_NODE);	
+			if (result != MPI_SUCCESS) 
+				prnerror (result, "coalesced nonBN node MPI_Isend error:");
+			MPI_Wait (&nodesendreq, &nodesendst);
+		}
+
+		else if (coreID == 0) {
+			dataPerNode[0] = *(datum->getAlphaBuffer());
+			for (int i=1; i<ppn; i++)
+				MPI_Irecv (dataPerNode+count*i, count, MPI_DOUBLE, i, i, MPI_COMM_NODE, &noderecvreq[i-1]);
+			MPI_Waitall (ppn-1, noderecvreq, noderecvst);
+		}
+	}
+	/* end - replacing gather by p2p */
+
+	else if (streams >= 2) {
+
+		//Send data to collectors
+		if (coreID%(ppn/streams) != 0) {
+			collector = (ppn/streams) * (coreID/(ppn/streams));
+			//printf ("%d (%d, %d) sends %d bytes to core %d on node %d\n", myrank, nodeID, coreID, count, collector, nodeID);
+			//result = MPI_Send (datum->getAlphaBuffer(), count, MPI_DOUBLE, collector, coreID, MPI_COMM_NODE);	
+			result = MPI_Isend (datum->getAlphaBuffer(), count, MPI_DOUBLE, collector, coreID, MPI_COMM_NODE, &nodesendreq);	
+			if (result != MPI_SUCCESS) 
+				prnerror (result, "coalesced nonBN node MPI_Isend error:");
+			MPI_Wait (&nodesendreq, &nodesendst);
+		}
+
+		//Receive data at collectors from senders in the node
+		else if (coreID%(ppn/streams) == 0) {
+			int start = coreID+1, end = coreID + ppn/streams;
+			dataPerNode[0] = *(datum->getAlphaBuffer());
+			for (int i=start; i<end; i++) {
+				int j = i - coreID; // ppn/streams;
+				MPI_Irecv (dataPerNode+count*j, count, MPI_DOUBLE, i, i, MPI_COMM_NODE, &noderecvreq[j-1]);
+				//MPI_Irecv (dataPerNode+count*i, count, MPI_DOUBLE, i, i, MPI_COMM_NODE, &noderecvreq[i-1]);
+			}
+			MPI_Waitall (ppn/streams-1, noderecvreq, noderecvst);	// cores 1 - ppn/2-1
+		}
+
+	}
+
+#ifdef DEBUG
+	t = MPI_Wtime() - t;
+	if (nodeID < 2 && coreID % (ppn/streams) == 0) 
+		printf ("%d: %d my BN %lf seconds\n", myrank, myBridgeRank, t);
+#endif
+
+	int datalen = count * ppn;
+	if(streams >= 2) datalen /= streams;
+
+	//only core 0 sends in the case of 1 stream
+	//if (coreID == 0) {
+	if (streams < 2 && coreID == 0) {
+		//result = MPI_Send (dataPerNode, datalen, MPI_DOUBLE, myBridgeRank, myrank, MPI_COMM_WORLD); //, &sendreq);	
+		result = MPI_Isend (dataPerNode, datalen, MPI_DOUBLE, myBridgeRank, myrank, MPI_COMM_WORLD, &sendreq);	
+		if (result != MPI_SUCCESS) 
+			prnerror (result, "coalesced nonBN node core 0 MPI_Isend error:");
+		MPI_Wait (&sendreq, &sendst);
+	}
+
+	//additional cores send
+	else if (streams >= 2 && coreID % (ppn/streams) == 0) {
+		result = MPI_Isend (dataPerNode, datalen, MPI_DOUBLE, myBridgeRank, myrank, MPI_COMM_WORLD, &sendreq);	
+		if (result != MPI_SUCCESS) 
+			prnerror (result, "coalesced nonBN node core ppn/2 MPI_Isend error:");
+		MPI_Wait (&sendreq, &sendst);
+	}
+
+}
+//end coalesceData
 
 void getData(int myWeight) {
 
