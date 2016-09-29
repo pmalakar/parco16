@@ -184,6 +184,8 @@ class dataBlock {
 
 int writeFile (dataBlock *, int, int);
 
+void coalesceData (dataBlock *, int);
+
 /* Allocate and free memory before and after use */ //Though this is bit of overhead but .. Just to ensure there is no spatial locality interference affecting the statistics
     
 void alloc_free (dataBlock *datum, int type) {
