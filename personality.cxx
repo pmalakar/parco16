@@ -61,7 +61,7 @@ int bridgeNodeInfo[2];
 int *routingOrder;
 
 /*
- * 	Maximum heap available per rank 
+ *	Maximum heap available per rank 
  */
 uint64_t heapAvail;
 
@@ -153,7 +153,7 @@ void getPersonality (int rank, int destRank) {
 	int intmdtCoords[6];
 	for (int dim=0; dim < MPIX_TORUS_MAX_DIMS; dim++) 
 		intmdtCoords[dim] = hw.Coords[dim];
-	   
+		 
 	intmdtCoords[MPIX_TORUS_MAX_DIMS] = 0;
 
 	int hopnum = 0;
@@ -199,7 +199,7 @@ void getPersonality (int rank, int destRank) {
 					else {
 									//if source coord is even, plus direction
 						if (hw.Coords[dimID]%2 == 0)	// see phil's email: Aug 22, 2014
-							intmdtCoords[dimID] = (intmdtCoords[dimID] + unitHop) % hw.Size[dimID]; 		//even source coord: traverse in plus direction  
+							intmdtCoords[dimID] = (intmdtCoords[dimID] + unitHop) % hw.Size[dimID];			//even source coord: traverse in plus direction  
 						else 
 							intmdtCoords[dimID] = ((intmdtCoords[dimID] - unitHop) + hw.Size[dimID]) % hw.Size[dimID];  
 					}
