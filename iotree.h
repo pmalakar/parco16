@@ -9,14 +9,32 @@
 
 using namespace std;
 
-const int INITIALIZER = -1;
+//const int INITIALIZER = -1;
 
 //BGQ specific
+extern int numNodes, myWeight, myBNIdx;
+extern int numBridgeNodes, numBridgeNodesAll;
+extern int numMPInodes, size, bncommsize;
 
-int numNodes, myWeight, myBNIdx;
+extern int rootps;
+extern int *bridgeNodeAll; 					//[MidplaneSize*2]				//2 integers per rank
+extern bool *visited, *processed;		//[MidplaneSize][MidplaneSize];
+extern int *newBridgeNode;					//[MidplaneSize]
+extern uint8_t **revisit;
+extern uint8_t **depthInfo; 				//[numBridgeNodes][MidplaneSize];
+extern int *bridgeRanks; 						//[numBridgeNodes];
+extern uint8_t bridgeNodeCurrIdx;
 
-//float avgWeight[numBridgeNodes];
-float currentSum=0.0, currentAvg=0.0;
+extern float currentSum, currentAvg;
+
+extern int lb, ub;
+extern int collector;
+
+extern MPI_Comm MPI_COMM_core, MPI_COMM_NODE;
+extern MPI_Comm MPI_COMM_MIDPLANE;
+extern MPI_Comm COMM_BRIDGE_NODES, COMM_BRIDGE_NODES_core;
+
+extern int BAG;
 
 class Node {
 
@@ -77,11 +95,6 @@ class Node {
 
 }*head, *tail, *root;
 
-//queue <Node *> nodeList;
-//queue <Node *> rootNodeList[numBridgeNodes];
-
-//Node **bridgeNodeRootList;
-
 int writeFlag=1; 
 
 // Variables
@@ -98,11 +111,11 @@ char *fileNameFS = "dummyFile";
 char *fileNameFSBN = "dummyFileBN";
 char *fileNameFSCO = "dummyFileCO";
 
-double tIOStart, tIOEnd;
-double tION_elapsed[2]={0.0,0.0}, tFS_elapsed[2]={0.0,0.0};
+//double tIOStart, tIOEnd;
+//double tION_elapsed[2]={0.0,0.0}, tFS_elapsed[2]={0.0,0.0};
 
 //store results
-double *alphaSum;	//reduce result stored at root
+//double *alphaSum;	//reduce result stored at root
 
 #define MAXBUF (1024*32)
 
