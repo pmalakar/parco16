@@ -1093,12 +1093,12 @@ void traverse (int index, int level) {
 				}
 			}
 
-#ifdef DEBUG
+//#ifdef DEBUG
 			for (j=0; j<midplane; j++) 
 				if (newBridgeNode[j] >= 0 && myrank == bridgeRanks[newBridgeNode[j]] && depthInfo[newBridgeNode[j]][j] != 255)
 					printf("%d: %d %d is new BN for %d prev %d %d difference %d\n", myrank, bridgeRanks[newBridgeNode[j]], depthInfo[newBridgeNode[j]][j], j, bridgeNodeAll[j*2], bridgeNodeAll[j*2+1], bridgeNodeAll[j*2+1]-depthInfo[newBridgeNode[j]][j] );
-			//				printf("%d: %d (%d) is the new BN for %d at distance %d %d\n", myrank, bridgeRanks[newBridgeNode[j]], newBridgeNode[j], j, bridgeNodeAll[j*2+1], depthInfo[newBridgeNode[j]][j]);
-#endif
+//				printf("%d: %d (%d) is the new BN for %d at distance %d %d\n", myrank, bridgeRanks[newBridgeNode[j]], newBridgeNode[j], j, bridgeNodeAll[j*2+1], depthInfo[newBridgeNode[j]][j]);
+//#endif
 
 			for (bn=0; bn<numBridgeNodes ; bn++) 
 				if (bridgeRanks[bn] == myrank) myWeight = int(avgWeight[bn]);
@@ -1576,27 +1576,31 @@ void traverse (int index, int level) {
 		if (coreID == 0 && bridgeNodeInfo[1] == 1 && myrank == bridgeRanks[0]) 
 			printf ("\n%d:%d:%d: myWeight = %d\n", myrank, coreID, nodeID, myWeight);
 
-		/*
-			 int idx = 7; //0
+/*
+		
+		int idx = index; // 7; //0
 
 		//if (coreID == 0 && type == 1 && bridgeNodeInfo[0]*ppn == bridgeRanks[idx] && bridgeRanks[idx] < midplane) { 
-		if (coreID == 0 && type == 1) { // && bridgeNodeInfo[0]*ppn == bridgeRanks[idx] && bridgeRanks[idx] < midplane) { 
-		printf("\ntype 1: %d %d %d %d\n", myrank, bridgeNodeInfo[0]*ppn, bridgeNodeInfo[1], bridgeRanks[idx]);  
-		getPersonality (myrank, bridgeNodeInfo[0]*ppn);
+		//if (coreID == 0 && type == 1) { // && bridgeNodeInfo[0]*ppn == bridgeRanks[idx] && bridgeRanks[idx] < midplane) { 
+		if (type == 1) { // && bridgeNodeInfo[0]*ppn == bridgeRanks[idx] && bridgeRanks[idx] < midplane) { 
+			printf("\ntype 1: %d %d %d %d\n", myrank, bridgeNodeInfo[0]*ppn, bridgeNodeInfo[1], bridgeRanks[idx]);  
+			getPersonality (myrank, bridgeNodeInfo[0]*ppn);
 		}
 		//getPersonality (myrank, bridgeNodeAll[index*2]);
 		//else if (type == 0 && newBridgeNode[index]<1 && bridgeRanks[idx] < midplane) {
 		else if (type == 0) {
-		//printf("\ndebug: %d %d %d %d\n", coreID, bridgeNodeInfo[1], bridgeNodeInfo[0]*ppn, bridgeRanks[idx]);  
-		if (coreID == 0 && bridgeNodeInfo[1] != 1 && newBridgeNode[index] != -1) { 
-		printf("%d %d %d MyNewBN %d (%d) from %d (%d)\n", myrank, nodeID, ppn, bridgeRanks[newBridgeNode[index]], depthInfo[newBridgeNode[index]][index], bridgeNodeInfo[0]*ppn, bridgeNodeInfo[1]);
-		getPersonality (myrank, bridgeRanks[newBridgeNode[index]]);
-		}
-		//else if (coreID == 0 && bridgeNodeInfo[1] != 1 && newBridgeNode[index] == -1 && bridgeNodeInfo[0]*ppn == bridgeRanks[idx]) { 
-		else if (coreID == 0 && bridgeNodeInfo[1] != 1 && newBridgeNode[index] == -1) { 
-		printf("%d %d %d I write through BN %d (%d)\n", myrank, nodeID, ppn, bridgeNodeInfo[0]*ppn, bridgeNodeInfo[1]); //bridgeNodeAll[index*2+1]);
-		getPersonality (myrank, bridgeNodeInfo[0]*ppn);
-		}
+			//printf("\ndebug: %d %d %d %d\n", coreID, bridgeNodeInfo[1], bridgeNodeInfo[0]*ppn, bridgeRanks[idx]);  
+			//if (coreID == 0 && bridgeNodeInfo[1] != 1 && newBridgeNode[index] != -1) { 
+			if (bridgeNodeInfo[1] != 1 && newBridgeNode[index] != -1) { 
+				printf("%d %d %d I have new BN %d (%d) from %d (%d)\n", myrank, nodeID, ppn, bridgeRanks[newBridgeNode[index]], depthInfo[newBridgeNode[index]][index], bridgeNodeInfo[0]*ppn, bridgeNodeInfo[1]);
+				getPersonality (myrank, bridgeRanks[newBridgeNode[index]]);
+			}
+			//else if (coreID == 0 && bridgeNodeInfo[1] != 1 && newBridgeNode[index] == -1 && bridgeNodeInfo[0]*ppn == bridgeRanks[idx]) { 
+			//else if (coreID == 0 && bridgeNodeInfo[1] != 1 && newBridgeNode[index] == -1) { 
+			else if (bridgeNodeInfo[1] != 1 && newBridgeNode[index] == -1) { 
+				printf("%d %d %d I write through BN %d (%d)\n", myrank, nodeID, ppn, bridgeNodeInfo[0]*ppn, bridgeNodeInfo[1]); //bridgeNodeAll[index*2+1]);
+				getPersonality (myrank, bridgeNodeInfo[0]*ppn);
+			}
 		}
 
 */
@@ -1608,5 +1612,5 @@ void traverse (int index, int level) {
 #endif
 		return 0;
 
-	}
+		}
 
