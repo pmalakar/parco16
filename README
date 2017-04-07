@@ -3,4 +3,4 @@ This is the code used in our paper:
 Data movement optimizations for independent MPI I/O on the Blue Gene/Q, Preeti Malakar, Venkatram Vishwanath, Parallel Computing, 2017
 http://www.sciencedirect.com/science/article/pii/S016781911630062X
 
-This code tries to optimally send data to the I/O nodes on a BG/Q for MPI independent writes. For more details, please refer the above paper.
+This code tries to optimally send data to the I/O nodes on a BG/Q for MPI independent writes. For more details, please refer to the above paper.
