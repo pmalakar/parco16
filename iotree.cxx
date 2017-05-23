@@ -1576,8 +1576,8 @@ int main (int argc, char **argv) {
 	if (coreID == 0 && bridgeNodeInfo[1] == 1 && myrank == bridgeRanks[0]) 
 		printf ("\n%d:%d:%d: myWeight = %d\n", myrank, coreID, nodeID, myWeight);
 
-	/*
-		 int idx = 7; //0
+
+		 int idx = index ; //7; //0
 
 	//if (coreID == 0 && type == 1 && bridgeNodeInfo[0]*ppn == bridgeRanks[idx] && bridgeRanks[idx] < midplane) { 
 	if (coreID == 0 && type == 1) { // && bridgeNodeInfo[0]*ppn == bridgeRanks[idx] && bridgeRanks[idx] < midplane) { 
@@ -1599,7 +1599,7 @@ int main (int argc, char **argv) {
 			}
 	  }
 
-*/
+// */
 
 
 #ifdef STATS
