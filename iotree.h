@@ -1,40 +1,14 @@
-#ifndef __bgqBridgeNode__
-#define __bgqBridgeNode__
+#ifndef __iotree__
+#define __iotree__
 
 #define NONBLOCKING 0
-
 #define prnl printf("\n")
-
 #define __STDC_FORMAT_MACROS 1 // In C++ the macros are not automatically defined just by including the file. 
 
 using namespace std;
 
-//const int INITIALIZER = -1;
-
-//BGQ specific
-extern int numNodes, myWeight, myBNIdx;
-extern int numBridgeNodes, numBridgeNodesAll;
-extern int numMPInodes, size, bncommsize;
-
-extern int rootps;
-extern int *bridgeNodeAll; 					//[MidplaneSize*2]				//2 integers per rank
-extern bool *visited, *processed;		//[MidplaneSize][MidplaneSize];
-extern int *newBridgeNode;					//[MidplaneSize]
-extern uint8_t **revisit;
-extern uint8_t **depthInfo; 				//[numBridgeNodes][MidplaneSize];
-extern int *bridgeRanks; 						//[numBridgeNodes];
-extern uint8_t bridgeNodeCurrIdx;
-
-extern float currentSum, currentAvg;
-
-extern int lb, ub;
-extern int collector;
-
-extern MPI_Comm MPI_COMM_core, MPI_COMM_NODE;
-extern MPI_Comm MPI_COMM_MIDPLANE;
-extern MPI_Comm COMM_BRIDGE_NODES, COMM_BRIDGE_NODES_core;
-
-extern int BAG;
+// Variables
+extern int myrank, commsize, mode, fileSize;
 
 class Node {
 
@@ -93,60 +67,18 @@ class Node {
 				if (rank == nodeId) printf("First level of (%d): %d[%d]\n ", nodeId, childIndexPtr[i]->getNodeId(), i);
 		}
 
-}*head, *tail, *root;
-
-int writeFlag=1; 
-
-// Variables
-int oneKB = 1024;
-int oneMB = 1024*1024;
-int myrank, commsize, mode, fileSize;
-int totalBytes[2][3] = {0};
-
-MPI_File fileHandle;
-MPI_Status status;
-MPI_Request request;
-char *fileNameION = "/dev/null";
-char *fileNameFS = "dummyFile";
-char *fileNameFSBN = "dummyFileBN";
-char *fileNameFSCO = "dummyFileCO";
-
-//double tIOStart, tIOEnd;
-//double tION_elapsed[2]={0.0,0.0}, tFS_elapsed[2]={0.0,0.0};
-
-//store results
-//double *alphaSum;	//reduce result stored at root
+};
 
 #define MAXBUF (1024*32)
-
-int hPSet;  // Punit Event Set handle
-int hL2Set;  // Punit Event Set handle
-int hNWSet; // Network Event Set handle
-int hIOSet; // I/O Event Set handle
 
 #define xMicroSec 1000000
 
 // Function Declarations
 
-// Functions
-
-//adapted verbatim from https://wiki.alcf.anl.gov/parts/index.php/Blue_Gene/Q#Allocating_Memory
-void * bgq_malloc(size_t n)
-{
-    void * ptr;
-    size_t alignment = 32; /* 128 might be better since that ensures every heap allocation 
-                            * starts on a cache-line boundary */
-    posix_memalign( &ptr , alignment , n );
-    return ptr;
-}
-
-
-double ClockSpeed()
-{
-    Personality_t personality;
-    Kernel_GetPersonality(&personality, sizeof(Personality_t));
-    return (personality.Kernel_Config.FreqMHz * 1.0e6);
-}
+int writeFile (dataBlock *, int, int);
+void coalesceData (dataBlock *, int);
+void getData(int);
+int findNeighbours (int);
 
 
 //data used for computation, analysis, IO etc..
@@ -195,13 +127,9 @@ class dataBlock {
 };
 
 
-int writeFile (dataBlock *, int, int);
-
-void coalesceData (dataBlock *, int);
-
 /* Allocate and free memory before and after use */ //Though this is bit of overhead but .. Just to ensure there is no spatial locality interference affecting the statistics
     
-void alloc_free (dataBlock *datum, int type) {
+inline void alloc_free (dataBlock *datum, int type) {
     
     if (type == 1) {
 
@@ -220,9 +148,8 @@ void alloc_free (dataBlock *datum, int type) {
 
 }
 
-void getData(int);
 
-void prnerror (int error_code, char *string)
+inline void prnerror (int error_code, char *string)
 {
 	
 	char error_string[256];
@@ -233,11 +160,9 @@ void prnerror (int error_code, char *string)
 	exit(-1);
 }
 
-int min (int a, int b) {
+inline int min (int a, int b) {
 	if (a<=b) return a;
 	else return b;
 }
-
-int findNeighbours (int);
 
 #endif

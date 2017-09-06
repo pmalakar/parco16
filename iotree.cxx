@@ -88,13 +88,53 @@ int blocking;		//0=nonblocking, 1=blocking
 int type;				//0=optimized independent, 1=independent, 2=collective
 int streams;		//0=use gather, 1=1 core collects, 2=2 core collects and sends (=2 streams), 4=4 streams
 
+int myrank, commsize, mode, fileSize;
 int count; 
+int oneKB = 1024;
+int oneMB = 1024*1024;
+int totalBytes[2][3] = {0};
 
 double tstart, tend, tend_ION;
 double Tmax, Tmin, Tmax_test2;
 
 MPI_Request *req, *wrequest;	//req[myWeight], wrequest[myWeight+1];
 MPI_Status stat, *wstatus;		//stat, wstatus[myWeight+1];
+
+char *fileNameION = "/dev/null";
+char *fileNameFS = "dummyFile";
+char *fileNameFSBN = "dummyFileBN";
+char *fileNameFSCO = "dummyFileCO";
+
+MPI_File fileHandle;
+MPI_Status status;
+MPI_Request request;
+
+int hPSet;  // Punit Event Set handle
+int hL2Set;  // Punit Event Set handle
+int hNWSet; // Network Event Set handle
+int hIOSet; // I/O Event Set handle
+
+Node *head, *tail, *root;
+
+int writeFlag=1; 
+
+/*
+int MPI_File_write_at(MPI_File fh, MPI_Offset offset, void *buf,
+                      int count, MPI_Datatype datatype, MPI_Status *status)
+{
+  
+	if (myrank < 2) printf("new function executed\n");
+  return PMPI_File_write_at(fh, offset, buf, count, datatype, status);
+}
+
+int MPI_File_write_at_all(MPI_File fh, MPI_Offset offset, void *buf,
+                          int count, MPI_Datatype datatype, 
+                          MPI_Status *status)
+{
+	//printf("new function executed\n");
+  return PMPI_File_write_at_all(fh, offset, buf, count, datatype, status);
+}
+*/
 
 /*
  *  Independent MPI-IO
@@ -1613,4 +1653,24 @@ void traverse (int index, int level) {
 		return 0;
 
 		}
+
+//adapted verbatim from https://wiki.alcf.anl.gov/parts/index.php/Blue_Gene/Q#Allocating_Memory
+void * bgq_malloc(size_t n)
+{
+    void * ptr;
+    size_t alignment = 32; /* 128 might be better since that ensures every heap allocation 
+                            * starts on a cache-line boundary */
+    posix_memalign( &ptr , alignment , n );
+    return ptr;
+}
+
+
+double ClockSpeed()
+{
+    Personality_t personality;
+    Kernel_GetPersonality(&personality, sizeof(Personality_t));
+    return (personality.Kernel_Config.FreqMHz * 1.0e6);
+}
+
+
 
