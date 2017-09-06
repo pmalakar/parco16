@@ -5,6 +5,9 @@
 #define prnl printf("\n")
 #define __STDC_FORMAT_MACROS 1 // In C++ the macros are not automatically defined just by including the file. 
 
+#define MAXBUF (1024*32)
+#define xMicroSec 1000000
+
 using namespace std;
 
 // Variables
@@ -69,17 +72,6 @@ class Node {
 
 };
 
-#define MAXBUF (1024*32)
-
-#define xMicroSec 1000000
-
-// Function Declarations
-
-int writeFile (dataBlock *, int, int);
-void coalesceData (dataBlock *, int);
-void getData(int);
-int findNeighbours (int);
-
 
 //data used for computation, analysis, IO etc..
 
@@ -125,6 +117,13 @@ class dataBlock {
 	}
 
 };
+
+// Function Declarations
+
+int writeFile (dataBlock *, int, int);
+void coalesceData (dataBlock *, int);
+void getData(int);
+int findNeighbours (int);
 
 
 /* Allocate and free memory before and after use */ //Though this is bit of overhead but .. Just to ensure there is no spatial locality interference affecting the statistics

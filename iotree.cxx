@@ -118,7 +118,7 @@ Node *head, *tail, *root;
 
 int writeFlag=1; 
 
-/*
+
 int MPI_File_write_at(MPI_File fh, MPI_Offset offset, void *buf,
                       int count, MPI_Datatype datatype, MPI_Status *status)
 {
@@ -127,14 +127,31 @@ int MPI_File_write_at(MPI_File fh, MPI_Offset offset, void *buf,
   return PMPI_File_write_at(fh, offset, buf, count, datatype, status);
 }
 
+int MPI_File_iwrite_at(MPI_File fh, MPI_Offset offset, void *buf,
+                      int count, MPI_Datatype datatype, MPI_Request *request)
+{
+  
+	if (myrank < 2) printf("new function executed\n");
+  return PMPI_File_iwrite_at(fh, offset, buf, count, datatype, request);
+}
+
 int MPI_File_write_at_all(MPI_File fh, MPI_Offset offset, void *buf,
                           int count, MPI_Datatype datatype, 
                           MPI_Status *status)
 {
-	//printf("new function executed\n");
+	if (myrank < 2) printf("new function executed\n");
   return PMPI_File_write_at_all(fh, offset, buf, count, datatype, status);
 }
-*/
+
+#ifdef MPI3
+int MPI_File_iwrite_at_all(MPI_File fh, MPI_Offset offset, void *buf,
+                          int count, MPI_Datatype datatype, 
+                          MPI_Request *request)
+{
+	if (myrank < 2) printf("new function executed\n");
+  return PMPI_File_iwrite_at_all(fh, offset, buf, count, datatype, request);
+}
+#endif
 
 /*
  *  Independent MPI-IO

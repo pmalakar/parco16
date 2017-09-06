@@ -1,6 +1,12 @@
 
 This is the code used in our paper: 
-Data movement optimizations for independent MPI I/O on the Blue Gene/Q, Preeti Malakar, Venkatram Vishwanath, Parallel Computing, 2017
+Data movement optimizations for independent MPI I/O on the Blue Gene/Q, Preeti Malakar, Venkatram Vishwanath, Parallel Computing, 2017.
 http://www.sciencedirect.com/science/article/pii/S016781911630062X
 
+A preliminary version also appeared in:
+Route-aware independent MPI I/O on the blue gene/Q, Preeti Malakar, Venkatram Vishwanath, DISCS@SC, 2015.
+http://dl.acm.org/citation.cfm?doid=2831244.2831251
+
 This code tries to optimally send data to the I/O nodes on a BG/Q for MPI independent writes. For more details, please refer to the above paper.
+
+Audio Slides (5 min): http://audioslides.elsevier.com//ViewerSmall.aspx?source=1&doi=10.1016/j.parco.2016.07.002
